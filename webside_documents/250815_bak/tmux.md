@@ -1,0 +1,45 @@
+---
+title: 分屏工具TMUX使用指导
+abbrlink: 16126
+date: 2025-03-07 11:02:23                   
+---
+
+### 本章节主要针对终端命令行状态下的分屏工具TMUX梳理使用指导
+> #### 如遇到增补内容会实时更新
+
+##### 常用操作方法
+
+- 窗口创建
+
+``` bash
+Ctrl + b + "      # 创建上下分屏会话
+Ctrl + b + %      # 创建左右分屏会话
+Ctrl + b + c      # 在当前会话下创建一个新会话
+```
+
+- 窗口变更
+
+``` bash
+Ctrl + d           # 关闭一个会话窗口
+Ctrl + b + x       # 关闭一个分屏窗口
+Ctrl + b + d       # 分离一个会话窗口
+tmux ls            # 查看已经分离的会话窗口 
+tmux attach -t <n> # 进入一个会话窗口
+tmux kill-session -t <n> # 杀死一个会话窗口 
+Ctrl + b + p       # 切换上一个会话窗口 
+Ctrl + b + n       # 切换下一个会话窗口
+Ctrl + b + Ctrl + o # 会话窗口前移
+Ctrl + b + Alt + o  # 会话窗口后移 
+```
+
+- 窗口切换
+
+``` bash
+Ctrl + b + 空格键 # 上下分屏与左右分屏切换
+Ctrl + b + o      # 光标选择跳转到下一分屏
+Ctrl + b + <up/down/lift/right> # 按照箭头方向跳转分屏
+Ctrl + b + Ctrl + <up/down/lift/right> # 按照箭头方向调整会话分屏大小
+```
+
+#### 以上便是本章节全部内容
+##### 感谢阅读

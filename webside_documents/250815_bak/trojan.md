@@ -1,0 +1,273 @@
+---
+title: 搭建tls加密线路
+abbrlink: 57344
+date: 2024-05-13 17:03:23
+---
+
+开篇前还是那句老话：一款工具如何使用，是个人的意志决定的，工具本身没有好坏之分，请使用者自行斟酌
+
+## 声明： 本站坚决不会承认该方案为原创，取证的绕路
+本次搭建服务端使用的是带公网IP的VPS设备，当然原理都是相同，在内网或分布式黑盒环境做也是没问题忽略掉第一步即可，别忘了网关服务器自行解析或者服务端内部直接IP定向；本次搭建使用docker容器进行，同时容器在使用过程中防第三方监听、渗透有奇效
+
+### 好，废话少说 现在开始
+- 先梳理文件数据结构(工作目录)
+
+| 容器目录 | 一级目录 | 二级目录 |
+| :------ | :------ | :------ |
+| 网站证书密钥 | web.key | \ |
+| 网站证书文件 | web.crt | \ |
+| 代理证书密钥 | proxy.key | \ |
+| 代理证书文件 | proxy.crt | \ |
+| Trojan-go 配置文件 | config.json | \ |
+| 项目源码二进制文件提取 | geoip.dat | \ |
+| 项目源码二进制文件提取 | geosite.dat | \ |
+| 建立cointop容器及pull映像 | docker-compose.yml | \ |
+| websocket通信协议指定目录，用户认证 | proxy/ | \ |
+| 前端工具，定义劫持及流量转发 | nginx/ | nginx.conf |
+
+- 再梳理工作逻辑
+
+| 客户机访问 | 流量发送到服务 |
+| :------: | :------: |
+| 正常网站访问 | (前端劫持+分流规则) |
+| Trojan 协议访问(后端线路) | 非正确 Trojan 协议访问(重定向到前端劫持的网站) |
+| 非常规 (扫描) 等被动攻击访问 | (重定向到前端劫持的网站) |
+
+## 搭建执行工作的逻辑文件目录
+#### 证书要搞2套4份，具体怎么搞就不说了，本站有文章
+#### 使用git工具拉取 [trojan-go项目源码](https://github.com/p4gefau1t/trojan-go) 或者 [直接下载项目releases文件对应的系统版本](https://github.com/p4gefau1t/trojan-go/releases) 并解压提取geoip.dat和geosite.dat复制到工作目录下
+#### 建立docker-compose.yml文件(使用docker run同理)，如下内容
+
+``` bash
+version: '3'
+services:
+ trojan-go:
+   container_name: trojan-go
+   image: teddysun/trojan-go
+   volumes:
+     - ./:/etc/trojan-go/
+   restart: always
+   network_mode: "host"
+   # 使用宿主机网络，以保证与nginx容器处于同一网段
+   depends_on:
+     - nginx
+     # 在nginx容器已启动的状态下启动
+
+ nginx:
+   image: nginx
+   restart: always
+   container_name: nginx
+   network_mode: "host"
+   environment:
+     - TZ=Asia/Shanghai
+   ports:
+     - "80:80"
+     - "443:443"
+     - "445"
+     - "1443"
+   volumes:
+     - ./:/etc/trojan-go/
+     - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+     - ./nginx/logs/:/etc/nginx/logs/
+```
+
+#### 建立nginx/nginx.conf文件(定义前端劫持及分流规则)
+需要修改的部分注意看代码注释，千万不要遗漏，任何遗漏都会导致运行失败
+
+``` bash
+# 大概意思就是upstream代理监听本地的1443及445端口，下一步trojan配置会使用到；然后本地网站使用443与80端口，并且本地80端口流量强制到本地443端口（http协议明文不安全），分流规则会引导到1443端口进行处理，下一步trojan配置时会将445端口强制到本地80端口，所以你在配置防火墙时，只需要开放本地80及443端口即可，攻击者要想监听分流规则也需要渗透到DMZ后方，如果不配置防火墙，分分钟抓你的数据包，代码内容如下：
+    user nginx;
+    worker_processes auto;
+    error_log  logs/error.log;
+    error_log  logs/error.log  notice;
+    error_log  logs/error.log  info;
+    
+    pid        logs/nginx.pid;
+    
+    include /usr/share/nginx/modules/*.conf;
+    
+    events {
+        worker_connections 2048; # 最大连接数可根据服务器性能调低
+    }
+    
+    stream {
+        map $ssl_preread_server_name $backend_name {
+            web.net web; # 修改为你的网站域名(非劫持域名)
+            proxy.net trojan; # 修改为你的Trojan协议网站域名
+        }
+    
+        upstream web {
+            server 127.0.0.1:1443;
+        }
+    
+        upstream trojan {
+            server 127.0.0.1:445;
+        }
+    
+        server {
+            listen 443 reuseport;
+            listen [::]:443 reuseport;
+            proxy_pass  $backend_name;
+            ssl_preread on;
+        }
+    }
+    
+    http {
+    
+       server {
+          listen 1443 ssl http2;
+          server_name web.net; # 修改为你的网站域名(非劫持域名)
+    
+          ssl_certificate       /etc/trojan-go/web.crt;
+          ssl_certificate_key   /etc/trojan-go/web.key;
+    
+          ssl_session_cache shared:SSL:1m;
+          ssl_session_timeout 5m;
+          ssl_session_tickets off;
+    
+          ssl_protocols         TLSv1.2 TLSv1.3;
+          ssl_ciphers           ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
+          ssl_prefer_server_ciphers on;
+    
+          location / {
+               proxy_pass https://hijack.net; # 修改为你将要劫持的域名url
+               proxy_ssl_server_name on;
+               proxy_redirect off;
+               sub_filter_once off;
+               sub_filter "hijack.net" $server_name; # 修改为你将要劫持的域名
+               proxy_set_header Host "hijack.net"; # 修改为你将要劫持的域名
+               proxy_set_header Referer $http_referer;
+               proxy_set_header X-Real-IP $remote_addr;
+               proxy_set_header User-Agent $http_user_agent;
+               proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+               proxy_set_header X-Forwarded-Proto https;
+               proxy_set_header Accept-Encoding "";
+               proxy_set_header Accept-Language "zh-CN";
+                      }
+    
+            }
+    
+        server {
+            listen       1443 ssl http2;
+            server_name  proxy.net; # 修改为你的Trojan协议网站域名
+    
+            ssl_certificate      /etc/trojan-go/proxy.crt;
+            ssl_certificate_key  /etc/trojan-go/proxy.key;
+    
+            ssl_session_cache    shared:SSL:1m;
+            ssl_session_timeout  5m;
+    
+            ssl_protocols        TLSv1.2 TLSv1.3;
+            ssl_ciphers          ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
+            ssl_prefer_server_ciphers  on;
+    
+            location / {
+               proxy_pass https://hijack.net; # 修改为你将要劫持的域名url
+               proxy_ssl_server_name on;
+               proxy_redirect off;
+               sub_filter_once off;
+               sub_filter "hijack.net" $server_name; # 修改为你将要劫持的域名
+               proxy_set_header Host "hijack.net"; # 修改为你将要劫持的域名
+               proxy_set_header Referer $http_referer;
+               proxy_set_header X-Real-IP $remote_addr;
+               proxy_set_header User-Agent $http_user_agent;
+               proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+               proxy_set_header X-Forwarded-Proto https;
+               proxy_set_header Accept-Encoding "";
+               proxy_set_header Accept-Language "zh-CN";
+            }
+        }
+    
+        server {
+            listen 80;
+            server_name web.net; # 修改为你的网站域名(非劫持域名)
+            rewrite ^(.*)$ https://${server_name}$1 permanent;
+               }
+    }
+# 注意：劫持最好是选择自己的搭建的网站，劫持他人网站会存在司法风险，本站对这种行为不建议也不负责
+```
+
+#### 建立config.json配置文件
+需要修改的部分我就不注释了，因为配置文件运行容易报错，我简单说一下
+- "sni" 和 "hostname" 修改为你的Trojan协议网站域名
+- "password" 修改为你需要设置的密码，客户机连接会用到
+
+```bash
+# 文件内容如下
+{
+      "run_type": "server",
+      "local_addr": "127.0.0.1",
+      "local_port": 445,
+      "remote_addr": "127.0.0.1",
+      "remote_port": 80,
+      "password": [
+          "custom-password"
+      ],
+      "ssl": {
+          "cert": "/etc/trojan-go/proxy.crt",
+          "key": "/etc/trojan-go/proxy.key",
+          "sni": "proxy.net",
+          "fallback_addr": "127.0.0.1",
+          "fallback_port": 1443
+      },
+      "router": {
+          "enabled": true,
+          "block": [
+              "geoip:private"
+          ],
+          "geoip": "/etc/trojan-go/geoip.dat",
+          "geosite": "/etc/trojan-go/geosite.dat"
+      },
+  
+      "websocket": {
+          "enabled": true,
+          "path": "/etc/trojan-go/proxy",
+          "hostname": "proxy.net"
+      }
+  }
+```
+
+## 完成以上五个步骤所需的内容基本就搞定了
+### 接下来就是部署容器，启用服务端
+
+```bash
+docker-compose up -d # 运行容器
+docker-compose logs # 检查容器运行情况
+```
+----------------------
+
+## 客户端测试
+可以使用trojan协议的客户端有很多，需要自行尝试，我以clash为例配置为：
+
+```bash
+- {name: MySVR, server: web.net, port: 443, type: trojan, password: custom-password, sni: proxy.net, skip-cert-verify: false, udp: true, network: ws, ws-opts: {path: /etc/trojan-go/proxy, headers: {Host: proxy.net}}}
+# 客户端除server使用网站域名以外，所有内容根据第五步配置文件进行调整
+```
+-----------------------
+
+### 可选：物理机搭建注意事项
+#### 有些童鞋不喜欢使用docker就要用物理机+项目源码的方式搭建，当然可以
+你需要先修改nginx.conf文件的头部为：
+
+```bash
+user nginx;
+worker_processes auto;
+error_log /var/log/nginx/error.log;
+pid /run/nginx.pid;
+include /usr/share/nginx/modules/*.conf;
+```
+
+还有就是需要注意nginx有可能在启动时会报错
+
+```bash
+systemctl status nginx # 查看运行情况
+/usr/sbin/nginx -t -q # 查看报错信息
+# 当出现 [emerg] getpwnam("nginx") failed 的错误信息，你需要
+useradd -s /bin/false nginx # 加权
+# 当出现 [emerg] unknown directive "stream" 的错误信息，你需要
+load_module /usr/lib/nginx/modules/ngx_stream_module.so; # debian环境下加载模组
+load_module '/usr/lib64/nginx/modules/ngx_stream_module.so'; # centos环境下加载模组
+```
+
+将模组加入nginx.conf文件的头部即可，根据自己的系统二选一加入，不要无脑全复制
+以上便是本章节全部内容
