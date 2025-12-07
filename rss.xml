@@ -1,0 +1,4060 @@
+<?xml version="1.0" encoding="UTF-8"?><rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>DUK技术栈</title><description>v3.8.313</description><link>https://fuwari.vercel.app/</link><language>zh_CN</language><item><title>部署NFS实例</title><link>https://fuwari.vercel.app/posts/%E9%83%A8%E7%BD%B2nfs%E5%AE%9E%E4%BE%8B/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/%E9%83%A8%E7%BD%B2nfs%E5%AE%9E%E4%BE%8B/</guid><pubDate>Fri, 01 Aug 2025 00:00:00 GMT</pubDate><content:encoded>&lt;ul&gt;
+&lt;li&gt;注意：NFS 服务严格依赖 RPC 服务&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;如对RPC服务及端口不信任的，可以终止搭建了&lt;/p&gt;
+&lt;h3&gt;本次搭建使用docker-compose项目的方式&lt;/h3&gt;
+&lt;p&gt;以&lt;code&gt;服务端&lt;/code&gt; 与 &lt;code&gt;客户端&lt;/code&gt;的方式进行部署&lt;/p&gt;
+&lt;hr /&gt;
+&lt;h2&gt;服务端部署&lt;/h2&gt;
+&lt;p&gt;在开始前请规划好物理存储规划，假如负责nfs存储的为/dev/sda2，建立开机自启挂载&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;vim /etc/fstab
+UUID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx /mnt/nfs               ext4    defaults        0 0
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;下载nfs服务端容器镜像&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;sudo docker pull itsthenetwork/nfs-server-alpine
+sudo docker images | grep nfs # 下载完成查看容器镜像
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;配置文件&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;services:
+    nfs:
+        image: itsthenetwork/nfs-server-alpine
+        container_name: nfs-server
+        ports:
+          - &quot;2049:2049&quot;
+          - &quot;111:111&quot;
+          - &quot;20048:20048&quot;
+        environment:
+          - SHARED_DIRECTORY=/mnt/data
+          - EXPORTS_EXPRESSION=/mnt/data *(rw,sync,no_subtree_check)
+          - PERMITTED=&quot;192.168.0.*&quot;
+        volumes:
+          - /mnt/nfs:/mnt/data
+        restart: always
+        privileged: true
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;服务启动后允许192.168.0.0/24网段的设备访问，服务占用宿主机的2049、111、20048端口，使用：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;sudo docker compose up -d # 启动服务
+sudo netstat -nltp # 查看服务端口是否启动
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2&gt;客户端配置&lt;/h2&gt;
+&lt;p&gt;客户端需要安装 &lt;strong&gt;nfs-utils&lt;/strong&gt; 组件以完成接入服务，请根据自身linux系统情况进行安装&lt;/p&gt;
+&lt;p&gt;客户端的rpc服务不是必须的，可以使用：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;sudo systemctl disable --stop rpcbind.socket
+sudo systemctl disable --stop rpcbind.service
+# 禁用客户端rpc服务
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;接入服务端nfs服务&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;sudo mount -v -o vers=4,loud 192.168.0.2:/ /mnt
+# 将192.168.0.2服务器nfs存储挂载到本地的/mnt路径下
+# 没有报错则成功，如报错请检查配置信息
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;设计开机自启nfs存储，将信息添加至 &lt;strong&gt;/etc/fstab&lt;/strong&gt; 文件&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;192.168.0.2:/             /mnt               nfs     defaults,timeo=900,retrans=5,_netdev    0 0
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;以上便是本章节全部内容&lt;/h3&gt;
+&lt;h3&gt;感谢阅读&lt;/h3&gt;
+</content:encoded></item><item><title>软RAID实现</title><link>https://fuwari.vercel.app/posts/%E8%BD%AFraid%E5%AE%9E%E7%8E%B0/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/%E8%BD%AFraid%E5%AE%9E%E7%8E%B0/</guid><pubDate>Sun, 11 May 2025 00:00:00 GMT</pubDate><content:encoded>&lt;h3&gt;本文主要介绍在Linux环境下使用systemd-boot结合mdadm实现软件层面的raid冗余&lt;/h3&gt;
+&lt;blockquote&gt;
+&lt;p&gt;思维拓扑&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h3&gt;物理存储&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;# 假设主机设备存在两块物理存储
+/dev/nvme0n1
+/dev/nvme1n1
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;引导分区&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;# 该部分做主备配合BIOS进行UEFI引导
+/dev/nvme0n1p1
+/dev/nvme1n1p1
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;逻辑分区&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;# 逻辑分区使用lvm作为linux根文件系统
+/dev/mapper/linux-root
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;整体结构&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;nvme0n1 # 物理存储
+├─nvme0n1p1 # systemd-boot备引导
+└─nvme0n1p2 # gpt格式
+  └─md1 # raid1冗余
+    └─linux-root # lvm逻辑分区
+nvme1n1 # 物理存储
+├─nvme1n1p1 # systemd-boot主引导
+└─nvme1n1p2 # gpt格式
+  └─md1 # raid1冗余
+    └─linux-root # lvm逻辑分区
+&lt;/code&gt;&lt;/pre&gt;
+&lt;blockquote&gt;
+&lt;p&gt;具体实现&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h3&gt;使用parted工具进行物理存储分区&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;# 操作nvme0n1物理分区
+sudo parted /dev/nvme0n1
+mklabel gpt # 配置为GPT（GUID 分区表）标签
+# 对于M2存储，从扇区4096开始会比较好，具体原因请自查
+mkpart ESP 4096s 512M # 创建一个名为 ESP 的分区，从扇区 4096 开始，大小为 512MB
+mkpart primary 512M -1 # 创建一个主分区为 primary 的分区，从 512MB 处开始，直到磁盘的末尾用于存储操作系统和其他数据
+set 1 boot on # 设置第一个分区（即 ESP 分区）为引导分区，以便系统可以从中引导
+# 该步骤同步操作nvme1n1物理分区
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;使用mdadm工具建立md1阵列分区&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;# 将nvme0n1p2与nvme1n1p2创建级别为raid1的存储阵列
+sudo mdadm --create /dev/md1 --level=1 --raid-devices=2 /dev/nvme0n1p2 /dev/nvme1n1p2
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;创建lvm逻辑分区&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;sudo pvcreate /dev/md1
+sudo vgcreate linux /dev/md1
+sudo lvcreate -l +100%FREE linux -n root
+sudo mkfs.ext4 /dev/mapper/linux-root
+# 创建完成可以使用lvs命令测试lvm逻辑分区状态
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;分区挂载及基础系统环境安装&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;sudo mount /dev/mapper/linux-root /mnt
+sudo mkdir -p /mnt/boot
+# 格式化引导主分区
+mkfs.fat -F32 /dev/nvme1n1p1
+# 格式化引导备分区
+mkfs.fat -F32 /dev/nvme0n1p1
+# 挂载主引导分区
+sudo mount /dev/nvme1n1p1 /mnt/boot
+# 成功创建后使用df工具可以查看分区挂载状态
+df -h
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;接下来就可以使用命令行或者安装工具将Linux内核及对应发行版的操作系统安装到lvm分区里，安装完成后我们还需要一些关键操作才能使得引导自动加载&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;注意：确保lvm分区内的操作系统已经安装mdadm工具&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;# 在外部运行该命令查看当前的阵列状态
+sudo mdadm --detail /dev/md1
+# 在外部将存储UUID写入操作系统
+genfstab -U /mnt &amp;gt; /mnt/etc/fstab
+# 在外部将阵列表写入操作系统
+sudo mkdir -p /mnt/etc/mdadm
+sudo mdadm --detail --scan &amp;gt;&amp;gt; /mnt/etc/mdadm/mdadm.conf
+sudo mdadm --detail --scan &amp;gt;&amp;gt; /mnt/etc/mdadm.conf
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;修改mkinitcpio.conf文件信息&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;sudo vim /mnt/etc/mkinitcpio.conf
+    BINARIES=(mdmon)
+# 在一个 FakeRAID 阵列上使用 mdadm_udev 钩子
+    HOOKS=(base systemd ... block mdadm_udev lvm2 ...)
+# systemd保证操作系统启动引导为systemd-boot
+# mdadm_udev引导阶段读取默认mdadm.conf配置文件
+# lvm2引导阶段正常读取lvm分区
+chroot /mnt # 进入操作系统内部
+mkinitcpio -p linux # 更新/mnt/boot内的内核引导文件
+reboot # 以上步骤没有报错，则重启软raid生效
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;使用systemd-boot引导可以参考这篇&lt;a href=&quot;https://cyber-mobile.net/s/systemd-boot.html#&quot;&gt;《替换systemd-boot启动引导》&lt;/a&gt;&lt;/h3&gt;
+&lt;h3&gt;如果重启无报错，配置备引导分区&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;# 重启后将备分区挂载
+sudo mount /dev/nvme0n1p1 /mnt
+# 拷贝引导文件
+sudo cp -rf /boot/* /mnt
+# 退出挂载
+sudo umount -R /mnt
+# 重启进入BIOS尝试备分区是否能正常引导操作系统
+# 如果能正常引导则操作完成
+# 未来可使用自动化工具定期备份引导文件
+# 未来如果有内核升级，必须全量备份引导文件
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;以上为本篇文章全部内容&lt;/h3&gt;
+&lt;h3&gt;感谢阅读&lt;/h3&gt;
+</content:encoded></item><item><title>使用git管理仓库</title><link>https://fuwari.vercel.app/posts/%E4%BD%BF%E7%94%A8git%E7%AE%A1%E7%90%86%E4%BB%93%E5%BA%93/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/%E4%BD%BF%E7%94%A8git%E7%AE%A1%E7%90%86%E4%BB%93%E5%BA%93/</guid><pubDate>Fri, 02 May 2025 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;本文主要介绍如何使用git命令管理仓库&lt;/h2&gt;
+&lt;h3&gt;配置访问用户&lt;/h3&gt;
+&lt;h3&gt;本文仅使用用户级(非全局配置)&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;git config --global user.name &quot;name&quot; # 配置用户名
+git config --global user.email &quot;email@qq.com&quot; # 配置邮箱
+gh auth login # 通过web授权的方式对仓库进行权限验证
+cat ~/.gitconfig 可以查看配置的用户信息
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;日常仓库操作&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;git clone &amp;lt;https://github.com/something/something.git&amp;gt; # 克隆远端仓库到本地
+git clone -b main2 &amp;lt;https://github.com/something/something.git&amp;gt; # 获取分支仓库，但仍会跟踪其他分支
+git clone -b main2 --single-branch &amp;lt;https://github.com/something/something.git&amp;gt; # 获取分支仓库，不再跟踪其他分支
+git remote show origin # 查看远端分支信息
+git branch -avv # 查看远端分支的状态
+git log origin/main # 查看远端分支仓库日志
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;本地仓库修改内容后&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;git status # 查看本地与远端仓库状态
+git add path/files # 更新文件
+git rm path/files # 删除文件
+git commit -m &quot;Update&quot; # 为本次调整打上标签
+git push origin main # 将本地调整的内容上传至远端仓库
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;远端仓库修改内容后&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;git fetch origin main # 同步远端仓库记录至本地，不修改内容
+git pull origin main # 以远端分支仓库为标准将内容修改至本地仓库
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;切换本地仓库对应的远端仓库分支状态&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;git checkout -b main2 # 切换本地仓库至main2分支
+git status # 查看本地仓库分支是否已经同步切换
+# 修改相关信息后
+git add . # 将本地仓库进行更新
+git commit -m &quot;Upload&quot; # 为本次调整打上标签
+git push origin main2 # 将本地仓库分支上传至远端仓库
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;以上便是本篇文章的全部内容&lt;/h3&gt;
+&lt;h3&gt;感谢阅读&lt;/h3&gt;
+</content:encoded></item><item><title>Systemd-boot引导</title><link>https://fuwari.vercel.app/posts/systemd-boot%E5%BC%95%E5%AF%BC/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/systemd-boot%E5%BC%95%E5%AF%BC/</guid><pubDate>Thu, 27 Mar 2025 00:00:00 GMT</pubDate><content:encoded>&lt;h3&gt;本文参考自UP主&lt;a href=&quot;https://www.bilibili.com/video/BV1kdLqzeEBA/?spm_id_from=333.337.search-card.all.click&quot;&gt;unixchad&lt;/a&gt;的教程及&lt;a href=&quot;https://wiki.archlinuxcn.org/wiki/Systemd-boot&quot;&gt;Arch Wiki&lt;/a&gt;相关文章&lt;/h3&gt;
+&lt;h3&gt;流程分解&lt;/h3&gt;
+&lt;p&gt;步骤&lt;/p&gt;
+&lt;hr /&gt;
+&lt;p&gt;&lt;a href=&quot;Systemd-boot%E5%BC%95%E5%AF%BC%2022db526f61fd80ee980bf52689b4a722.md&quot;&gt;查询引导状态&lt;/a&gt;&lt;/p&gt;
+&lt;hr /&gt;
+&lt;p&gt;&lt;a href=&quot;Systemd-boot%E5%BC%95%E5%AF%BC%2022db526f61fd80ee980bf52689b4a722.md&quot;&gt;安装引导工具&lt;/a&gt;&lt;/p&gt;
+&lt;hr /&gt;
+&lt;p&gt;&lt;a href=&quot;Systemd-boot%E5%BC%95%E5%AF%BC%2022db526f61fd80ee980bf52689b4a722.md&quot;&gt;卸载旧引导&lt;/a&gt;&lt;/p&gt;
+&lt;hr /&gt;
+&lt;blockquote&gt;
+&lt;p&gt;查询状态&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;pre&gt;&lt;code&gt;bootctl status # 查看当前使用的引导工具
+ls -l /boot # 查看Linux内核文件
+ls -l /boot/efi # 查看引导文件
+cat /etc/fstab # 查看分区(记录UUID)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;blockquote&gt;
+&lt;p&gt;安装systemd-boot引导&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;pre&gt;&lt;code&gt;sudo bootctl install
+cd /boot/efi
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;编辑loader.conf文件&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;sudo vim loader/loader.conf
+    default arch.conf
+    timeout 3
+    console-mode auto
+    editor no
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;编辑arch.conf文件及arch-fallback.conf文件&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;# 将之前记录的UUID填入引导配置文件
+sudo vim loader/entries/arch.conf
+    title   Archlinux
+    linux   /vmlinux-linux-zen
+    initrd  /initramfs-linux-zen.img
+    options root=UUID=xxx rw
+sudo vim loader/entries/arch-fallback.conf
+    title   Archlinux(fallback)
+    linux   /vmlinux-linux-zen
+    initrd  /initramfs-linux-zen-fallback.img
+    options root=UUID=xxx rw
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;复制内核文件至引导路径&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;sudo cp /boot/initramfs-linux-zen* /boot/efi
+sudo cp /boot/vmlinux-linux-zen /boot/efi
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;查看引导配置&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;bootctl list # 注意所有路径是否有效
+&lt;/code&gt;&lt;/pre&gt;
+&lt;blockquote&gt;
+&lt;p&gt;重启成功后卸载GRUB引导&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;pre&gt;&lt;code&gt;sudo pacman -Rns grub
+sudo rm -rI /boot/grub
+sudo rm -rI /boot/efi/EFI/ARCH
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;删除efibootmgr引导记录&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;efibootmgr
+# 确定grub分区编号
+sudo efibootmgr -b 0 -B
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;以上便是本篇文章全部内容&lt;/h3&gt;
+&lt;h3&gt;感谢阅读&lt;/h3&gt;
+</content:encoded></item><item><title>Linux查看存储</title><link>https://fuwari.vercel.app/posts/linux%E6%9F%A5%E7%9C%8B%E5%AD%98%E5%82%A8/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/linux%E6%9F%A5%E7%9C%8B%E5%AD%98%E5%82%A8/</guid><pubDate>Mon, 10 Mar 2025 00:00:00 GMT</pubDate><content:encoded>&lt;blockquote&gt;
+&lt;p&gt;关于Linux环境下查看存储使用情况&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h3&gt;主要分为两个板块：&lt;code&gt;内部存储&lt;/code&gt; &lt;code&gt;外部存储&lt;/code&gt;&lt;/h3&gt;
+&lt;h3&gt;本文会根据网络提供的信息针对这两个板块进行系统梳理&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;内部存储&lt;/code&gt; 针对系统高速缓存、内存、交换分区&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;查看内存及交换分区使用情况&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;free -h # 查看内存使用情况
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;查看系统与内存间负载情况&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;vmstat # 查看核心处理器与内存负载情况
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;查看交换分区挂载情况&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;df -H | grep swap # 查看交换分区挂载位置
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;监控处理器负载&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;watch -n 1 -c &quot;uptime&quot; # 每隔1秒刷新一次CPU负载情况
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;查看用户登录时间&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;w # 查看当前用户连接时间与连接情况
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;外部存储&lt;/code&gt; 针对系统物理分区、逻辑分区、外置存储等&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;查看分区状态详细信息(含UUID)&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;fdisk -l # 详细梳理分区状态
+lsblk # 简易梳理分区状态
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;进入存储工具查看&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;cfdisk /dev/sda # 进入工具查看分区信息
+    quit # 退出不做更改
+parted /dev/sda
+    P # 打印分区信息
+    q # 退出工具并且不做更改
+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;查看IO对应进程对存储的读写情况&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;iotop # 启用工具实时查看存储读写状态
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;精细化查看文件系统目录使用情况&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;du -sh ./* # 查看当前目录下的所有文件夹使用情况
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;以上便是本章节全部内容&lt;/h3&gt;
+&lt;h3&gt;感谢阅读&lt;/h3&gt;
+</content:encoded></item><item><title>查看Linux内核版本</title><link>https://fuwari.vercel.app/posts/%E6%9F%A5%E7%9C%8Blinux%E5%86%85%E6%A0%B8%E7%89%88%E6%9C%AC/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/%E6%9F%A5%E7%9C%8Blinux%E5%86%85%E6%A0%B8%E7%89%88%E6%9C%AC/</guid><pubDate>Mon, 10 Mar 2025 00:00:00 GMT</pubDate><content:encoded>&lt;blockquote&gt;
+&lt;p&gt;本文主要针对如何查看系统内核及版本&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h3&gt;需要进行的相关操作 &lt;code&gt;命令&lt;/code&gt; 进行系统梳理&lt;/h3&gt;
+&lt;h3&gt;以下是命令概述某些功能有重复请忽略&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;uname 命令&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;uname -srm # 查看系统内核版本
+uname -a # 查看系统内核所有信息
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;查看proc内核关键信息&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;cat /proc/version # 查看发行版本
+cat /proc/sys/kernel/osrelease # 查看系统内核版本
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;查看release信息&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;cat /etc/*-release # 查看系统信息
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;查看hostnamectl输出信息&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;hostnamectl # 查看主机基本信息
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;以上是本章节全部内容&lt;/h3&gt;
+&lt;h3&gt;感谢阅读&lt;/h3&gt;
+</content:encoded></item><item><title>压缩工具TAR</title><link>https://fuwari.vercel.app/posts/%E5%8E%8B%E7%BC%A9%E5%B7%A5%E5%85%B7tar/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/%E5%8E%8B%E7%BC%A9%E5%B7%A5%E5%85%B7tar/</guid><pubDate>Sun, 09 Mar 2025 00:00:00 GMT</pubDate><content:encoded>&lt;blockquote&gt;
+&lt;p&gt;本文主要对压缩工具tar的日常使用方法进行梳理&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h3&gt;相关参考资料来源于网络，请读者自行测试&lt;/h3&gt;
+&lt;h3&gt;操作分类说明&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;先梳理文件数据结构(工作目录)&lt;/li&gt;
+&lt;/ul&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;tar操作命令&lt;/th&gt;
+&lt;th&gt;tar操作说明&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;-c&lt;/td&gt;
+&lt;td&gt;创建归档文件&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;-z&lt;/td&gt;
+&lt;td&gt;使用zip格式对文件进行压缩&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;-j&lt;/td&gt;
+&lt;td&gt;使用bzip2格式对文件进行压缩&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;-J&lt;/td&gt;
+&lt;td&gt;使用xz格式对文件进行压缩&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;-v&lt;/td&gt;
+&lt;td&gt;操作过程显示详细信息&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;-f&lt;/td&gt;
+&lt;td&gt;定义归档压缩的文件名&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3&gt;操作分类概述&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;标准为tar格式文件的压缩与解压&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;tar -cvf attach.tar /attach/1.txt /attach/2.txt # 用于将attach文件夹内的2个文件打包至.tar压缩包
+tar -cvf attach.tar /attach/ # 用于打包attach文件夹内所有文件至.tar压缩包
+tar -tf attach.tar # 用于查看当前目录下.tar压缩包的内容
+tar -xvf attach.tar # 解压.tar压缩包至当前目录，此时会释放attach/文件夹
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;标准为tar.gz格式文件的压缩与解压&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;tar -czvf attach.tar.gz /attach/1.txt /attach/2.txt # 用于将attach文件夹内的2个文件打包至.tar.gz压缩包
+tar -czvf attach.tar.gz /attach/ # 用于打包attach文件夹内所有文件至.tar.gz压缩包
+tar -tf attach.tar.gz # 用于查看当前目录下.tar.gz压缩包的内容
+tar -xzvf attach.tar.gz # 解压.tar.gz压缩包至当前目录，此时会释放attach/文件夹
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;标准为tar.bz2格式文件的压缩与解压&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;tar -cjvf attach.tar.bz2 /attach/1.txt /attach/2.txt # 用于将attach文件夹内的2个文件打包至.tar.bz2压缩包
+tar -cjvf attach.tar.bz2 /attach/ # 用于打包attach文件夹内所有文件至.tar.bz2压缩包
+tar -tf attach.tar.bz2 # 用于查看当前目录下.tar.bz2压缩包的内容
+tar -xjvf attach.tar.bz2 # 解压.tar.bz2压缩包至当前目录，此时会释放attach/文件夹
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;标准为tar.xz格式文件的压缩与解压&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;tar -cJvf attach.tar.xz /attach/1.txt /attach/2.txt # 用于将attach文件夹内的2个文件打包至.tar.xz压缩包
+tar -cJvf attach.tar.xz /attach/ # 用于打包attach文件夹内所有文件至.tar.xz压缩包
+tar -tf attach.tar.xz # 用于查看当前目录下.tar.xz压缩包的内容
+tar -xJvf attach.tar.xz # 解压.tar.xz压缩包至当前目录，此时会释放attach/文件夹
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;以上便是本章节全部内容&lt;/h3&gt;
+&lt;h3&gt;感谢阅读&lt;/h3&gt;
+</content:encoded></item><item><title>压缩工具ZIP与RAR</title><link>https://fuwari.vercel.app/posts/%E5%8E%8B%E7%BC%A9%E5%B7%A5%E5%85%B7zip%E4%B8%8Erar/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/%E5%8E%8B%E7%BC%A9%E5%B7%A5%E5%85%B7zip%E4%B8%8Erar/</guid><pubDate>Sun, 09 Mar 2025 00:00:00 GMT</pubDate><content:encoded>&lt;blockquote&gt;
+&lt;p&gt;本文主要对压缩工具zip与rar的日常使用方法进行梳理&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h3&gt;内容来源于网络，本文仅作整合，实际情况请自行测试&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;关于zip工具的说明&lt;/li&gt;
+&lt;/ul&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;zip/unzip命令&lt;/th&gt;
+&lt;th&gt;zip/unzip操作说明&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;zip -r&lt;/td&gt;
+&lt;td&gt;创建.zip压缩文件&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;zip -m&lt;/td&gt;
+&lt;td&gt;对现有.zip压缩文件添加文件&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;zip -d&lt;/td&gt;
+&lt;td&gt;在现有.zip压缩文件中删除文件&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;unzip -v&lt;/td&gt;
+&lt;td&gt;查看现有.zip压缩文件中的内容&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;unzip -d&lt;/td&gt;
+&lt;td&gt;对现有的.zip压缩文件进行解压&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;unzip -o&lt;/td&gt;
+&lt;td&gt;在不提示的情况下覆盖原文件&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;ul&gt;
+&lt;li&gt;关于zip工具的操作指南&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;zip -r attach.zip /attach/1.txt /attach/2.txt # 用于将attach文件夹内的2个文件打包至.zip压缩包
+zip -r attach.zip /attach/* # 用于打包attach文件夹内所有文件至.zip压缩包
+unzip -v attach.zip # 用于查看当前目录下.zip压缩包的内容
+zip -m attach.zip /attach/1.txt # 为当前目录下的.zip压缩包内增加一个文件
+zip -d attach.zip /attach/1.txt # 为当前目录下的.zip压缩包内删除一个文件
+unzip -d ./ attach.zip # 解压.zip压缩包至当前目录，此时会释放attach/文件夹
+unzip -o -d ./ attach.zip # 解压.zip压缩包至当前目录，此时会释放attach/文件夹并覆盖当前目录重名文件
+&lt;/code&gt;&lt;/pre&gt;
+&lt;hr /&gt;
+&lt;ul&gt;
+&lt;li&gt;关于rar工具的说明&lt;/li&gt;
+&lt;/ul&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;rar/unrar命令&lt;/th&gt;
+&lt;th&gt;rar操作说明&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;rar a&lt;/td&gt;
+&lt;td&gt;创建.rar压缩文件&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;rar a -r&lt;/td&gt;
+&lt;td&gt;创建.rar压缩文件(源文件夹内必须非空)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;rar a -p&lt;/td&gt;
+&lt;td&gt;创建.rar压缩文件(含密码创建)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;rar l&lt;/td&gt;
+&lt;td&gt;检查.rar压缩文件内容&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;rar v&lt;/td&gt;
+&lt;td&gt;检查.rar压缩文件完整性&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;unrar x&lt;/td&gt;
+&lt;td&gt;对现有.rar文件进行解压&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;unrar x -p&lt;/td&gt;
+&lt;td&gt;对现有.rar文件进行解压(含密码解压)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;unrar x -d&lt;/td&gt;
+&lt;td&gt;对现有.rar文件进行解压(解压到制定文件夹)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;ul&gt;
+&lt;li&gt;关于rar工具的操作指南&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;rar a attach.rar /attach/1.txt /attach/2.txt # 用于将attach文件夹内的2个文件打包至.rar压缩包
+rar a -r attach.rar /attach/ # 用于打包attach文件夹内所有文件至.rar压缩包
+rar a -p 123456 attach.rar /attach/1.txt /attach/2.txt # 用于打包过程并附加密码123456
+rar l attach.rar # 用于查看当前目录下.rar压缩包的内容
+rar v attach.rar # 用于校验压缩包内容是否完整
+unrar x attach.rar # 解压.rar压缩包至当前目录，此时会释放attach/文件夹
+unrar x attach.rar -p 123456 # 解压包过程输入密码123456
+unrar x attach.rar -d /attach # 解压包到指定路径
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;以上便是本章节全部内容&lt;/h3&gt;
+&lt;h3&gt;感谢阅读&lt;/h3&gt;
+</content:encoded></item><item><title>RANGER使用指导</title><link>https://fuwari.vercel.app/posts/ranger%E4%BD%BF%E7%94%A8%E6%8C%87%E5%AF%BC/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/ranger%E4%BD%BF%E7%94%A8%E6%8C%87%E5%AF%BC/</guid><pubDate>Fri, 07 Mar 2025 00:00:00 GMT</pubDate><content:encoded>&lt;h3&gt;本文主要对终端命令行下文件管理器ranger的使用方法进行梳理&lt;/h3&gt;
+&lt;blockquote&gt;
+&lt;p&gt;如遇增补内容会实时更新&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;ul&gt;
+&lt;li&gt;安装配置方面&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;工具包含：&lt;code&gt;ranger&lt;/code&gt;  &lt;code&gt;w3m&lt;/code&gt;&lt;/p&gt;
+&lt;p&gt;字体包括：&lt;code&gt;nerd-fonts-apple&lt;/code&gt;&lt;/p&gt;
+&lt;p&gt;针对不同发行版的Linux系统请根据实际情况自行下载&lt;/p&gt;
+&lt;p&gt;工具初始化&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;# 自动将配置文件复制至用户目录~/.config/ranger路径下
+ranger --copy-config=all
+# 启动图片预览功能
+vim ~/home/$USER/.config/ranger/rc.conf
+    set preview_images true # 修改为true启动状态
+    # 启动查看隐藏文件功能
+    set show_hidden true
+    # 启用文件夹边框
+    set draw_borders both
+    # 重新进入ranger生效
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;启动文件图标，参考&lt;a href=&quot;https://command-z-z.github.io/2022/08/23/%E7%BB%88%E7%AB%AF%E6%96%87%E4%BB%B6%E7%AE%A1%E7%90%86%E5%B7%A5%E5%85%B7ranger/&quot;&gt;这篇文档&lt;/a&gt;需要git插件才能生效&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;# 保证网络畅通将插件下载到本地
+git clone &amp;lt;https://github.com/alexanderjeurissen/ranger_devicons&amp;gt; ~/.config/ranger/plugins/ranger_devicons
+# 增项配置信息
+echo &quot;default_linemode devicons&quot; &amp;gt;&amp;gt; $HOME/.config/ranger/rc.conf
+# 修改Xterm字体配置(其他终端可根据实际情况自行修改)
+# 仅修改英文字体的部分
+vim ~/.Xresources
+    XTerm*faceNameDoublesize: Microsoft YaHei UI
+    XTerm*faceName: SFMono Nerd Font Mono
+    #XTerm*faceName: DejaVu Sans Mono 替换掉这段
+xrdb -merge ~/.Xresources # 使配置生效
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;工具使用方面&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;删除及选择操作&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;dD  # 单个文件删除
+# &amp;lt;space&amp;gt; 案件可以选择多个文件
+# 结合命令可进行多个文件批量删除
+cw  # 可取消&amp;lt;space&amp;gt;选择的多个文件
+v   # 当前目录下全选
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;显示隐藏文件&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;zh  # 显示目录下的隐藏文件
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;文件剪切与复制&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;dd  # 文件剪切
+yy  # 文件复制
+pp  # 文件粘贴
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;文件重命名&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;cw  # 文件重命名
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;文件查找&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;/   # 输入关键字当前目录下查找
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;终端目录跳转&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;S   # 跳转至当前目录的命令行状态
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;以上便是本章节全部内容&lt;/h3&gt;
+&lt;h3&gt;感谢阅读&lt;/h3&gt;
+</content:encoded></item><item><title>分屏工具TMUX</title><link>https://fuwari.vercel.app/posts/%E5%88%86%E5%B1%8F%E5%B7%A5%E5%85%B7tmux/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/%E5%88%86%E5%B1%8F%E5%B7%A5%E5%85%B7tmux/</guid><pubDate>Fri, 07 Mar 2025 00:00:00 GMT</pubDate><content:encoded>&lt;h3&gt;本章节主要针对终端命令行状态下的分屏工具TMUX梳理使用指导&lt;/h3&gt;
+&lt;blockquote&gt;
+&lt;p&gt;如遇到增补内容会实时更新&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h3&gt;常用操作方法&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;窗口创建&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;Ctrl + b + &quot;      # 创建上下分屏会话
+Ctrl + b + %      # 创建左右分屏会话
+Ctrl + b + c      # 在当前会话下创建一个新会话
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;窗口变更&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;Ctrl + d           # 关闭一个会话窗口
+Ctrl + b + x       # 关闭一个分屏窗口
+Ctrl + b + d       # 分离一个会话窗口
+tmux ls            # 查看已经分离的会话窗口
+tmux attach -t &amp;lt;n&amp;gt; # 进入一个会话窗口
+tmux kill-session -t &amp;lt;n&amp;gt; # 杀死一个会话窗口
+Ctrl + b + p       # 切换上一个会话窗口
+Ctrl + b + n       # 切换下一个会话窗口
+Ctrl + b + Ctrl + o # 会话窗口前移
+Ctrl + b + Alt + o  # 会话窗口后移
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;窗口切换&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;Ctrl + b + 空格键 # 上下分屏与左右分屏切换
+Ctrl + b + o      # 光标选择跳转到下一分屏
+Ctrl + b + &amp;lt;up/down/lift/right&amp;gt; # 按照箭头方向跳转分屏
+Ctrl + b + Ctrl + &amp;lt;up/down/lift/right&amp;gt; # 按照箭头方向调整会话分屏大小
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;以上便是本章节全部内容&lt;/h3&gt;
+&lt;h3&gt;感谢阅读&lt;/h3&gt;
+</content:encoded></item><item><title>编辑器VI及VIM</title><link>https://fuwari.vercel.app/posts/%E7%BC%96%E8%BE%91%E5%99%A8vi%E5%8F%8Avim/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/%E7%BC%96%E8%BE%91%E5%99%A8vi%E5%8F%8Avim/</guid><pubDate>Tue, 04 Feb 2025 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;本操作指导针对vi/vim编辑器的日常操作进行梳理&lt;/h2&gt;
+&lt;h3&gt;该编辑器共有两种模式：&lt;code&gt;查看模式&lt;/code&gt; 与 &lt;code&gt;编辑模式&lt;/code&gt;&lt;/h3&gt;
+&lt;blockquote&gt;
+&lt;p&gt;基础方法&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;ul&gt;
+&lt;li&gt;文件日常操作&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;:w # 保存文件
+:q # 退出查看模式
+:q! # 强制退出查看模式
+:wq! # 强制保存并退出查看模式
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;日常多文档操作&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;vim . # 进入当前文件夹选择好目标文件Enter进入编辑模式
+:tabe . # 开启多文档模式进入当前目录选择目标文件
+gt # 切换文档分页至上一篇文档(左)
+gT # 切换文档分页至下一篇文档(右)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;垂直移动&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;0 # 跳转到行首
+gg # 跳转至当前文档最顶部
+G # 跳转至当前文档最底部
+h # 向左移动光标
+j # 向下移动光标
+k # 向上移动光标
+l # 向右移动光标
+) # 移动到下一段句尾
+} # 移动到下一段段尾
+( # 移动到上一句句首
+{ # 移动到上一段段首
+Ctrl + u # 向上滚动半屏(类似pageup)
+Ctrl + d # 向下滚动半屏(类似pagedown)
+Ctrl + i # 跳转到下一次修改(含文件跳转)
+Ctrl + o # 跳转到上一次修改(含文件跳转)
+Ctrl + e # 向下滚动背景板(不含光标)
+Ctrl + y # 向上滚动背景板(不含光标)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;平行移动&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;^ # 跳转到整行行头
+$ # 跳转到整行行尾
+e # 将光标移动到下一段句尾
+w # 将光标移动到下一段句首
+b # 将光标移动到上一段句首
+fa # 将光标移动到下一个为a的字符处
+ta # 将光标移动到下一个为a的字符前一格
+Fa # 将光标移动到上一个为a的字符处
+Ta # 将光标移动到上一个为a的字符后一格
+&lt;/code&gt;&lt;/pre&gt;
+&lt;blockquote&gt;
+&lt;p&gt;编辑方法&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;ul&gt;
+&lt;li&gt;精准插入&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;# 首先按ESC键确保当前状态为查看模式
+a # 在当前光标的后方进入编辑模式
+i # 在当前光标的位置进入编辑模式
+o # 在当前光标的下方进入编辑模式
+s # 取代当前光标字符并进入编辑模式
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;创作式插入&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;O # 在当前光标的上一行进入编辑模式
+A # 在当前光标的行尾进入编辑模式
+I # 在当前光标的行首进入编辑模式
+S # 取代当前光标所在的整行字符并进入编辑模式
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;剪切复制与粘贴&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;# 确认已经使用Esc切换到查看模式
+dd # 定义为删除或剪切
+yy # 定义为复制
+P # 定义为粘贴当前行，光标下移
+p # 定义为粘贴当前行，光标上移
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;首航缩进&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;&amp;gt;&amp;gt; # 相当于TAB键缩进
+&amp;lt;&amp;lt; # 相当于反响缩进
+&lt;/code&gt;&lt;/pre&gt;
+&lt;blockquote&gt;
+&lt;p&gt;替换方法(仅针对临时改写)&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;ul&gt;
+&lt;li&gt;精准插入高级用法&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;c^ # 替换光标处到开头的字符(不含光标处)
+c$ # 替换光标处到结尾的字符
+cw # 替换光标处一个单词
+cf&quot; # 光标位于引号内,并替换到下一个引号内的字符
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;进入替换模式&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;R # 在当前字符下进入替换模式
+# 按ESC键可以退出替换模式
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;前进与返回&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;# 按ESC键确保自身当前所处的模式
+. # 定义为前进，会复制粘贴一遍最新编辑模式下编辑的内容
+u # 定义为返回
+Ctrl + r # 定义为恢复返回的内容
+U # 定义为恢复单行进入编辑模式前的状态
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;数字的递增与递减&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;Ctrl + a # 在光标处于数字上进行递增
+Ctrl + x # 在光标处于数字上进行递减
+&lt;/code&gt;&lt;/pre&gt;
+&lt;blockquote&gt;
+&lt;p&gt;进阶方法&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;ul&gt;
+&lt;li&gt;查找字段&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;:/type # 搜索名称为type的字段
+n # 跳转到下一个type字段的行
+N # 跳转到上一个type字段的行
+:nohl # 清空查找字段
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;选取字段&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;viw # 内部递增选取
+vaw # 字符递增选取
+va{ # 选取段落
+ggVG # 快速全选
+V3j # 向下快速选取3行
+# &quot;message&quot; 选取示例
+vi&quot; # 选取message
+va&quot; # 选取&quot;message&quot;
+# (message) 选取示例
+vi( # 选取message
+va( # 选取(message)
+# &amp;lt;title&amp;gt;message&amp;lt;/title&amp;gt;
+vit # 选取message
+vat # 选取&amp;lt;title&amp;gt;message&amp;lt;/title&amp;gt;
+# 以上命令可以配合c替换y复制d剪切p粘贴使用
+ESCx2 # 取消选取
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;巨集录制与执行&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;qq0ESCA.comESC0jq # 批量在每行结尾加上.com字符
+qq0ESCIwww.ESC0jq # 录制在每行的开头加上www.字符
+@q # 执行一次录制巨集
+8@@ # 执行8次已执行的录制巨集
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;批量替换&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;:/con # 搜索con字段
+N # 回到当前搜索位置
+cgn # 替换当前位置字段内容
+configESC # 将搜索内容替换为config
+. # 执行批量替换
+u # 回退批量替换
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;以上便是本章节全部内容&lt;/h3&gt;
+&lt;h3&gt;感谢阅读&lt;/h3&gt;
+</content:encoded></item><item><title>60配列键盘操作</title><link>https://fuwari.vercel.app/posts/60%E9%85%8D%E5%88%97%E9%94%AE%E7%9B%98%E6%93%8D%E4%BD%9C/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/60%E9%85%8D%E5%88%97%E9%94%AE%E7%9B%98%E6%93%8D%E4%BD%9C/</guid><pubDate>Sat, 01 Feb 2025 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;本操作指导仅针对61部分通用型机械键盘定义&lt;/h2&gt;
+&lt;h3&gt;并不包含所有键盘，请酌情使用&lt;/h3&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;类别&lt;/th&gt;
+&lt;th&gt;操作&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;code&gt;蓝牙控制&lt;/code&gt;&lt;/td&gt;
+&lt;td&gt;Fn + e 切换蓝牙连接1; Fn + r 切换蓝牙连接2; Fn + t 切换蓝牙设备3&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;code&gt;方向键&lt;/code&gt;&lt;/td&gt;
+&lt;td&gt;Fn + w 切换为方向键，此时 w(上)、s(下)、a(左)、d(右)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;code&gt;灯效控制&lt;/code&gt;&lt;/td&gt;
+&lt;td&gt;Fn + 左Alt 切换灯效开关; Fn + \ 切换灯效; Fn + ] 灯效亮度+; Fn + [ 灯效亮度-; Fn + &apos; 灯效节奏快; Fn + ; 灯效节奏慢&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;code&gt;声音控制&lt;/code&gt;&lt;/td&gt;
+&lt;td&gt;- Fn + v 切换静音; Fn + c 切换音量+; Fn + x 切换音量-&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;code&gt;功能键盘&lt;/code&gt;&lt;/td&gt;
+&lt;td&gt;Fn + 左Ctrl 切换功能键，此时 1、2、3、4、5、6、7、8、9、0、-、= 切换为F1-F12功能键&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;code&gt;功能键盘(其他用法)&lt;/code&gt;&lt;/td&gt;
+&lt;td&gt;Fn + 1 等同于f1; fN + 2 等同于F2; Fn + 3 等同于F3; 以此类推&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;code&gt;Delete键&lt;/code&gt;&lt;/td&gt;
+&lt;td&gt;Fn + m 切换为delete键&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;code&gt;Insert键&lt;/code&gt;&lt;/td&gt;
+&lt;td&gt;Fn + j 切换为insert键&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;code&gt;模拟右键&lt;/code&gt;&lt;/td&gt;
+&lt;td&gt;Fn 右邻居键可在窗口环境下模拟右键&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;code&gt;翻页键&lt;/code&gt;&lt;/td&gt;
+&lt;td&gt;Fn + l 切换为PageUP向上翻页键; Fn + . 切换为PageDOWN向下翻页键&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3&gt;以上便是本章节全部内容&lt;/h3&gt;
+&lt;h3&gt;如有变动实时更新&lt;/h3&gt;
+</content:encoded></item><item><title>TLS证书申请</title><link>https://fuwari.vercel.app/posts/tls%E8%AF%81%E4%B9%A6%E7%94%B3%E8%AF%B7/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/tls%E8%AF%81%E4%B9%A6%E7%94%B3%E8%AF%B7/</guid><pubDate>Fri, 03 Jan 2025 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;本篇文章基于Github项目的ACME脚本&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;注意：我个人是不建议小白或新人使用脚本的，那会使你一直是小白&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;确实是流程过于繁琐&lt;/h3&gt;
+&lt;p&gt;使用脚本的话才能实现三分钟搞定，建议不懂原理的童鞋，在搞定之后了解每步的详细操作流程
+项目脚本源码可点击【 &lt;a href=&quot;https://github.com/acmesh-official/acme.sh&quot;&gt;github.com/acmesh-official/acme.sh&lt;/a&gt; 】 这条链接查看&lt;/p&gt;
+&lt;h3&gt;脚本操作流程&lt;/h3&gt;
+&lt;p&gt;安装部署&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;curl &amp;lt;https://get.acme.sh&amp;gt; | sh # 安装脚本
+ln -s  /root/.acme.sh/acme.sh /usr/local/bin/acme.sh # 建立软连接以实现命令植入
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;根申请证书(需要提前做好域名解析到VPS地址，如何解析网上有许多教程)&lt;/h3&gt;
+&lt;h3&gt;自定义证书颁发机构，三选一&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;acme.sh --set-default-ca --server letsencrypt
+acme.sh --set-default-ca --server buypass
+acme.sh --set-default-ca --server zerossl
+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;绑定你的邮箱&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;acme.sh --register-account -m your@Email.com # 替换你的邮箱
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;可以申请证书咯&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;acme.sh  --issue -d your-web.domain-name.com  --standalone -k ec-256 # 替换你的域名
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;导出你的证书&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;acme.sh --installcert -d your-web.domain-name.com --ecc --key-file /path/ca.key --fullchain-file /path/ca.crt # 替换你的域名，以及密钥和证书的路径与名称
+# /path/ca.key是申请的网站密钥
+# /path/ca.crt是申请的网站证书
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;好了，到此你的网站证书就申请完成，如何使用就不展开细说了&lt;/h3&gt;
+&lt;p&gt;以上便是本篇文章的全部内容，感谢阅读&lt;/p&gt;
+</content:encoded></item><item><title>自签证书生成</title><link>https://fuwari.vercel.app/posts/%E8%87%AA%E7%AD%BE%E8%AF%81%E4%B9%A6%E7%94%9F%E6%88%90/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/%E8%87%AA%E7%AD%BE%E8%AF%81%E4%B9%A6%E7%94%9F%E6%88%90/</guid><pubDate>Thu, 02 Jan 2025 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;生成自签证书需要openssl工具支持&lt;/h2&gt;
+&lt;p&gt;没有安装的可以自行安装&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;废话不多直接上命令&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;openssl ecparam -genkey -name prime256v1 -out ca.key
+# 在当前目录下生成一枚ca.key的密钥
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;根据密钥生成自签证书&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;openssl req -new -x509 -days 36500 -key ca.key -out ca.crt -subj &quot;/CN=xxx.net&quot;
+# 证书的颁布机构及使用者为xxx.net，有效期限为36500天，证书为当前目录的ca.crt文件
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;可根据自身实际情况调整命令内容&lt;/h3&gt;
+&lt;p&gt;以上为本章节全部内容，感谢阅读&lt;/p&gt;
+</content:encoded></item><item><title>扫描工具ZMap</title><link>https://fuwari.vercel.app/posts/%E6%89%AB%E6%8F%8F%E5%B7%A5%E5%85%B7zmap/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/%E6%89%AB%E6%8F%8F%E5%B7%A5%E5%85%B7zmap/</guid><pubDate>Tue, 25 Jun 2024 00:00:00 GMT</pubDate><content:encoded>&lt;ul&gt;
+&lt;li&gt;ZMap是一款网络扫描工具，由University of Michigan的一组研究人员开发的，并在2013年发布&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;它的设计目标是使用户能够在几分钟内扫描完整个IPv4地址空间，这是一个包含约42亿个IP地址的巨大空间&lt;/h3&gt;
+&lt;p&gt;该工具的优势在于整个空间，而不是单个目标或某些对象，也不是说目标或对象不能扫，而是其他工具会更有优势&lt;/p&gt;
+&lt;h2&gt;ZMap工具的重要特点和功能&lt;/h2&gt;
+&lt;h3&gt;高速扫描,这个就没什么可说的，用过都能理解&lt;/h3&gt;
+&lt;h3&gt;协议支持：如HTTP、HTTPS、FTP、SSH等，它可以用于识别开放的网络服务、检测已知的漏洞、发现未经授权的访问等&lt;/h3&gt;
+&lt;h3&gt;灵活的扫描选项：用户可以选择扫描的端口范围、使用的协议、目标IP地址范围等&lt;/h3&gt;
+&lt;h3&gt;高度可定制化：用户可以修改和添加模块，以实现特定的功能和目标&lt;/h3&gt;
+&lt;h3&gt;数据分析和可视化：可以生成丰富的扫描结果数据&lt;/h3&gt;
+&lt;h3&gt;一些常用的ZMap命令&lt;/h3&gt;
+&lt;p&gt;需要注意的是，由于其高速扫描性质，ZMap在使用时需要谨慎，并遵守法律和道德准则，未经授权的扫描可能会违反法律规定并对目标网络造成负面影响；因此在使用前，请三思而后行&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;zmap -p &amp;lt;port&amp;gt; -o &amp;lt;output_file&amp;gt; # 扫描整个IPv4地址空间，并将结果保存在指定的输出文件中
+zmap -p &amp;lt;port&amp;gt; -r &amp;lt;start_ip&amp;gt;-&amp;lt;end_ip&amp;gt; -o &amp;lt;output_file&amp;gt; # 扫描指定IP地址范围内指定端口的开放情况，并将结果保存到指定的输出文件中
+zmap -M &amp;lt;module_name&amp;gt; -p &amp;lt;port&amp;gt; -o &amp;lt;output_file&amp;gt; # 使用指定的扫描模块对指定端口进行扫描，并将结果保存到指定的输出文件中
+zmap -p &amp;lt;port&amp;gt; -rate &amp;lt;packets_per_second&amp;gt; -o &amp;lt;output_file&amp;gt; # 扫描指定端口，并设置扫描的速率限制，即每秒发送的数据包数量，并将结果保存到指定的输出文件中
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;以上便是本篇文章的全部内容，当然这些命令只是ZMap的一小部分功能示例
+ZMap提供了更多选项和功能，用户可以通过查阅官方文档和帮助信息来了解更多详细信息和命令选项&lt;/p&gt;
+</content:encoded></item><item><title>Python2编译pyrit</title><link>https://fuwari.vercel.app/posts/python2%E7%BC%96%E8%AF%91pyrit/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/python2%E7%BC%96%E8%AF%91pyrit/</guid><pubDate>Mon, 24 Jun 2024 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;简单介绍：Pyrit 是一个用于无线网络渗透测试的开源工具，主要用于破解WPA/WPA2-PSK加密的Wi-Fi密码&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;注意：未经授权的使用 Pyrit 或进行未经授权的密码破解是违法行为&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;该项目方已经许久未更新，暂不支持python3所以部署需要本地使用python2根据自身系统环境进行编译&lt;/h2&gt;
+&lt;p&gt;原项目地址: &lt;a href=&quot;https://github.com/JPaulMora/Pyrit&quot;&gt;github.com/JPaulMora/Pyrit&lt;/a&gt; 建议了解清楚后再食用&lt;/p&gt;
+&lt;h3&gt;本次编译环境依旧是debian系环境&lt;/h3&gt;
+&lt;p&gt;首先我们需要安装依赖，从官方镜像源进行拉取&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;sudo apt install pip libpcap-dev python2-dev libffi-dev libssl-dev libxml2-dev libxslt1-dev zlib1g-dev -y
+# 如果遇到没有的镜像包请检查镜像源是否齐全
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;可选：安装同类型网络监听工具&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;sudo apt install wireshark-cli tshark reaver bully cowpatty macchanger hashcat hcxdumptool hcxtools hcxpcaptool -y
+# 这些工具在pyrit使用过程中可以优化，就不详细展开说明了
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2&gt;编译过程&lt;/h2&gt;
+&lt;h3&gt;拉取官方源码&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;sudo apt install curl git wget -y # 安装必备工具
+git clone &amp;lt;https://github.com/JPaulMora/Pyrit.git&amp;gt; # 克隆源码
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;以流式文本编辑器替换相关文件&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;cd pyrit/ # 进入源码目录
+sed -i &quot;s/COMPILE_AESNI/COMPILE_AESNIX/&quot; ./cpyrit/_cpyrit_cpu.c # 替换相关文件增加稳定性
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;编译与安装&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;python2 setup.py clean # 清除现有可执行文件
+python2 setup.py build # 当前环境编译工具，需要一些时间
+python2 setup.py install # 安装
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;测试工具&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;pyrit list_cores # 测试工具，如打印的内容与你的cpu核心数相同并且无其他报错，说明安装成功
+reboot # 重启系统环境
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;以上便是编译安装的全部过程&lt;/h3&gt;
+&lt;hr /&gt;
+&lt;h3&gt;另外附加 &lt;code&gt;镜像源&lt;/code&gt; 安装流程&lt;/h3&gt;
+&lt;p&gt;修改镜像源并搜索工具&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;  vim /etc/apt/sources.list
+  deb-src &amp;lt;http://mirrors.ustc.edu.cn/debian/&amp;gt; buster main
+  # 保存退出执行命令
+  sudo apt update &amp;amp;&amp;amp; sudo apt search pyrit
+  # 如果搜索到指定的包安装即可
+  sudo apt -y install pyrit
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;感谢阅读&lt;/p&gt;
+</content:encoded></item><item><title>Linux各端口的关闭</title><link>https://fuwari.vercel.app/posts/linux%E5%90%84%E7%AB%AF%E5%8F%A3%E7%9A%84%E5%85%B3%E9%97%AD/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/linux%E5%90%84%E7%AB%AF%E5%8F%A3%E7%9A%84%E5%85%B3%E9%97%AD/</guid><pubDate>Sun, 23 Jun 2024 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;有句话叫什么...&lt;/p&gt;
+&lt;h2&gt;开放的端口，是被入侵的开始&lt;/h2&gt;
+&lt;h3&gt;这3种网络管理守护进程是Linux系统下常用的进程间互斥同步&lt;/h3&gt;
+&lt;p&gt;假如一个设备没有开放的逻辑端口，并且没有连接网络
+那除了物理黑似乎也没别的办法&lt;/p&gt;
+&lt;h3&gt;今天我们就来搞一下端口的那些事&lt;/h3&gt;
+&lt;h3&gt;首先，确保安装 &lt;code&gt;net-tools&lt;/code&gt; 工具&lt;/h3&gt;
+&lt;p&gt;根据自己的系统环境选择代码执行&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;sudo apt update &amp;amp;&amp;amp; sudo apt install net-tools # Ubuntu/Debian
+sudo pacman -Syy &amp;amp;&amp;amp; sudo pacman -S net-tools  # Manjaro/Archlinux
+sudo yum install net-tools                    # CentOS/RHEL
+sudo pkg install net-tools                    # 你懂的
+&lt;/code&gt;&lt;/pre&gt;
+&lt;hr /&gt;
+&lt;ul&gt;
+&lt;li&gt;关闭远程连接SSH端口(22)&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;sudo systemctl status sshd.service  # 查看运行情况
+sudo systemctl stop sshd.service    # 显示运行中则关闭
+sudo systemctl disable sshd.service # 禁用开机自启动
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;禁用邮件传输代理Postfix端口(25)&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;sudo systemctl status postfix.service  # 查看运行情况
+sudo systemctl stop postfix.service    # 关闭端口
+sudo systemctl disable postfix.service # 禁用开机自启动
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;禁用网络打印机Cups端口(631)&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;sudo systemctl status cups.service     # 查看运行情况
+sudo systemctl stop cups.service       # 关闭端口
+sudo systemctl disable cups.service    # 禁用开机自启动
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;禁用本地域名解析DNS端口(5355和127.0.0.53/54:53)&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;# 修改配置文件
+vim /etc/systemd/resolved.conf
+# 编辑或修改以下配置信息
+LLMNR=0
+DNSStubListener=no
+# 保存后查看相关服务运行情况并禁用与关闭开机自启动
+sudo systemctl status avahi-deamon.socket
+sudo systemctl stop avahi-deamon.socket
+sudo systemctl disable avahi-deamon.socket
+# 重启内核域名服务以加载配置文件(可选项)
+sudo systemctl restart systemd-resolved.service
+# 建立软连接
+ln -sf /run/systemd/resolve/resolved.conf /etc/resolved.conf
+# 重启系统生效
+reboot
+# 重启后查看端口占用情况
+netstat -anp | grep 5353
+netstat -nltp
+&lt;/code&gt;&lt;/pre&gt;
+</content:encoded></item><item><title>Redir与Socat重定向</title><link>https://fuwari.vercel.app/posts/redir%E4%B8%8Esocat%E9%87%8D%E5%AE%9A%E5%90%91/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/redir%E4%B8%8Esocat%E9%87%8D%E5%AE%9A%E5%90%91/</guid><pubDate>Sun, 23 Jun 2024 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;在本篇文章开始前，我还是需要再次声明，工具是人在使用，工具无分好坏，用法则存在差异请各位读者自行斟酌&lt;/p&gt;
+&lt;h3&gt;流量转发是指将网络中的数据包从一个位置转发到另一个位置的过程&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;可以设置负载均衡策略，将流量在多个路径之间进行平衡，以提高网络的性能和可靠性&lt;/li&gt;
+&lt;li&gt;可以用于网络安全措施，如防火墙和入侵检测系统，以监测和过滤网络中的恶意流量&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;接下来，我们从较为简单的Redir工具开始&lt;/h3&gt;
+&lt;h3&gt;工作原理：redir是一个简单的端口重定向工具，通常用于将本地端口重定向到远程端口或将一个端口重定向到另一个端口&lt;/h3&gt;
+&lt;h3&gt;端口重定向：redir的主要目的是在不同的网络端口之间建立连接；它可以将传入的连接从一个本地端口重定向到另一个端口，也可以将传入的连接转发到远程主机的指定端口&lt;/h3&gt;
+&lt;h3&gt;传输类型：redir支持TCP和UDP两种传输类型；可以使用命令行选项来指定要使用的传输类型，可以在TCP和UDP之间进行转换，并且可以在不同的网络层级之间建立连接&lt;/h3&gt;
+&lt;h3&gt;简化功能：相对于socat来说，redir的功能更为简化；它主要用于端口重定向，并且不提供socat提供的复杂数据处理和转换功能，所以redir专注于提供简单且有效的端口转发能力&lt;/h3&gt;
+&lt;h3&gt;常用命令&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;redir -l 0.0.0.0:8080 -c remote-server:8080 # 将本地的8080端口重定向到远程服务器的8080端口
+redir -t udp -l :5000 -c 127.0.0.1:8000 # 将UDP的5000端口重定向到本地TCP的8000端口
+# -l：指定redir的监听地址和端口。
+# -c：指定要转发到的目标地址和端口。
+# -t：指定传输类型，可以是TCP或UDP。
+# -n：禁用DNS解析
+# 实战设置
+redir :51 test.com:51 # 目标已有规则快速配置，将本地的51端口快速重定向到test.com的51端口，不指定类型
+# 查看相关进程
+netstat -nltp # 需要安装net-tools工具，查看redir进程是否启动
+ps aux | grep redir # 列出所有包含 &quot;redir&quot; 关键字的进程
+pgrep redir # 显示与 &quot;redir&quot; 相关的进程ID
+kill &amp;lt;number&amp;gt; # 杀死 &quot;redir&quot; 的进程ID相当于关闭该服务
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;然后，是较为复杂的Socat工具&lt;/h3&gt;
+&lt;h3&gt;socat（SOcket CAT）是一个功能强大的网络工具，用于在不同的数据流之间建立连接；它提供了类似于Linux上的传统&quot;cat&quot;命令的功能，但是可以在不同的数据源之间建立双向通信；并且可以在网络上的两个节点之间创建各种连接，包括TCP、UDP、SSL、IPv4和IPv6&lt;/h3&gt;
+&lt;h3&gt;数据流连接：socat的主要目的是在不同的数据流之间建立连接；这些数据流可以是文件、终端、套接字、管道等等。socat能够将这些数据流连接起来，使得数据可以从一个流传输到另一个流&lt;/h3&gt;
+&lt;h3&gt;通信类型：socat支持多种不同类型的通信，包括TCP、UDP、UNIX域套接字等；您可以使用命令行选项来指定要使用的通信类型。例如，使用&quot;TCP-LISTEN&quot;选项可以将socat设置为监听TCP端口&lt;/h3&gt;
+&lt;h3&gt;数据处理：socat还提供了一些数据处理的功能；它可以进行数据的转换、过滤和修改。您可以使用各种选项和参数来定义数据处理的规则。例如，您可以使用&quot;REPLACE&quot;选项来替换数据中的特定字符串&lt;/h3&gt;
+&lt;h3&gt;常用命令&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;socat TCP-LISTEN:8080,fork TCP:remote-server:8080 # 监听本地的TCP端口8080，并将传入的连接转发到远程服务器的TCP端口8080
+socat -d -d PTY,raw,echo=0 PTY,raw,echo=0 # 创建两个虚拟终端设备，并在两个终端之间建立双向通信
+socat -u FILE:/path/to/file TCP-LISTEN:8080 # 从文件中读取内容，并将其发送到通过TCP监听的本地端口8080
+# -d：启用调试模式，显示详细的调试信息。
+# -v：启用详细输出模式，显示更多的信息。
+# -T：指定数据流的类型，例如TCP、UDP等。
+# -u：使用无连接的UDP传输模式。
+# -x：以十六进制形式显示数据的传输
+# 实战设置
+socat TCP-LISTEN:51,reuseaddr,fork OPENSSL:test.com:443,verify=0 # ssl加密传输
+socat TCP4-LISTEN:52,reuseaddr,fork TCP4:test.com:443 # tcp传输
+# TCP4-LISTEN:52：指定在本地监听52端口，接受传入的TCP连接
+# reuseaddr：允许地址重用，即使先前的连接仍在活动中，也可以使用相同的地址和端口
+# fork：为每个传入连接创建一个子进程来处理，允许同时处理多个连接
+# TCP4:test.com:443：指定远程服务器的IP地址和端口，这里是test.com的443端口
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;Redir与Socat的主要差异在于功能和用法的复杂性&lt;/h3&gt;
+&lt;h3&gt;redir提供了一种更简单的方式来进行端口重定向，而socat提供了更丰富的功能和更高级的数据处理能力；如果您只需要简单的端口转发功能，redir可能是一个更适合的选择；但如果您需要更复杂的功能和定制选项，socat可能更适合您的需求&lt;/h3&gt;
+&lt;h3&gt;以上便是本篇文章的全部内容&lt;/h3&gt;
+&lt;p&gt;感谢阅读&lt;/p&gt;
+</content:encoded></item><item><title>容器部署OwnCloud</title><link>https://fuwari.vercel.app/posts/%E5%AE%B9%E5%99%A8%E9%83%A8%E7%BD%B2owncloud/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/%E5%AE%B9%E5%99%A8%E9%83%A8%E7%BD%B2owncloud/</guid><pubDate>Sat, 22 Jun 2024 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;本站曾经搭建过共用云盘，奈何服务器的容量太小了，还每日每夜的被打&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;该云盘适合个人用，太多人存取比较考验服务器硬件性能，请量力而行&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;现在正式开始搭建&lt;/h2&gt;
+&lt;h3&gt;首先我们先梳理文件数据结构(工作目录)&lt;/h3&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;容器目录&lt;/th&gt;
+&lt;th&gt;一级目录&lt;/th&gt;
+&lt;th&gt;二级目录&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;/&lt;/td&gt;
+&lt;td&gt;cloud.key&lt;/td&gt;
+&lt;td&gt;-&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;/&lt;/td&gt;
+&lt;td&gt;cloud.crt&lt;/td&gt;
+&lt;td&gt;-&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;/&lt;/td&gt;
+&lt;td&gt;docker-compose.yml&lt;/td&gt;
+&lt;td&gt;-&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;/&lt;/td&gt;
+&lt;td&gt;nginx/&lt;/td&gt;
+&lt;td&gt;nginx.conf&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;/&lt;/td&gt;
+&lt;td&gt;mysql/&lt;/td&gt;
+&lt;td&gt;-&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;/&lt;/td&gt;
+&lt;td&gt;OwnData/&lt;/td&gt;
+&lt;td&gt;# 预留网盘数据目录&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;/&lt;/td&gt;
+&lt;td&gt;mysql.env&lt;/td&gt;
+&lt;td&gt;-&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;我习惯每次项目开始之前都梳理文件结构，方便在过程中修改及相关文件的查缺补漏，这是一个好习惯，可以在项目开始前进行文件的内容的汇总后再开始工作，运行过程中查看日志反馈情况即可&lt;/p&gt;
+&lt;h3&gt;搭建执行工作的逻辑文件目录&lt;/h3&gt;
+&lt;h3&gt;域名的申请与解析到服务器，就不过多赘述了，可以查看这篇文章 &lt;a href=&quot;https://web.workspace.net/s/3a-cert.html#&quot;&gt;机构认证【域名+VPS证书】三分钟搞定&lt;/a&gt; 需要1套域名及证书，复制到工作目录下，分别是网站的cloud.key和cloud.crt文件&lt;/h3&gt;
+&lt;h3&gt;建立docker-compose.yml文件&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;# During initial ownCloud setup, select &quot;Storage &amp;amp; database&quot; --&amp;gt; &quot;Configure the database&quot; --&amp;gt; &quot;MySQL/MariaDB&quot;
+# Database user: root
+# Database password: 12345
+# Database name: OwnCloud
+# Database host: replace &quot;localhost&quot; with &quot;mysql&quot;
+services:
+  owncloud:
+      image: owncloud
+      restart: always
+      volumes:
+        - &quot;./OwnData:/var/www/html&quot;
+      ports:
+        - &quot;80&quot;
+  mysql:
+      image: mysql:5.7
+      restart: always
+      container_name: mysql
+      environment:
+        - TZ=Asia/Shanghai
+      expose:
+        - &quot;3306&quot;
+      env_file:
+        - mysql.env
+      volumes:
+        - ./mysql/data:/var/lib/mysql
+        - ./mysql/logs:/var/log/mysql
+        - ./mysql/conf:/etc/mysql/conf.d
+  nginx:
+      image: nginx
+      restart: always
+      container_name: nginx
+      environment:
+        - TZ=Asia/Shanghai
+      ports:
+        - &quot;80:80&quot;
+        - &quot;443:443&quot;
+      volumes:
+        - ./:/opt/
+        - ./OwnData:/var/www/html
+        - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+        - ./nginx/logs/:/etc/nginx/logs/
+      depends_on:
+        - owncloud
+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;注意配置文件注释部分的内容，接下来我们会在mysql.env文件中定义这些内容&lt;/p&gt;
+&lt;h3&gt;建立mysql.env文件，加入如下内容&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;MYSQL_ROOT_PASSWORD=12345
+MYSQL_DATABASE=OwnCloud
+MYSQL_USER=user
+MYSQL_PASSWORD=12345
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;在项目运行过程中会需要使用其中的参数，请根据自身情况进行修改&lt;/p&gt;
+&lt;h3&gt;建立nginx/nginx.conf文件，加入如下内容&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;#user  nobody;
+worker_processes  1;
+error_log  logs/error.log;
+error_log  logs/error.log  notice;
+error_log  logs/error.log  info;
+pid        logs/nginx.pid;
+events {
+      worker_connections  256;
+}
+http {
+      include       mime.types;
+      default_type  application/octet-stream;
+      sendfile$ on;
+      keepalive_timeout   65;
+      server {
+      listen 80;
+      server_name cloud.net; # 修改为你解析好的域名
+      return 301 https://$server_name$request_uri;
+      }
+      server {
+      listen 443 ssl;
+      server_name cloud.net; # 修改为你解析好的域名
+      # SSL/TLS settings
+      ssl_certificate /opt/cloud.crt;  # 修改为实际证书文件路径
+      ssl_certificate_key /opt/cloud.key; # 修改为实际证书密钥路径
+      ssl_session_timeout 5m;
+      ssl_protocols TLSv1.2 TLSv1.3;
+      ssl_ciphers ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384;
+      ssl_prefer_server_ciphers on;
+      ssl_session_cache shared:SSL:10m;
+      # Security headers
+      add_header X-Frame-Options &quot;SAMEORIGIN&quot; always;
+      add_header X-Content-Type-Options &quot;nosniff&quot; always;
+      add_header X-XSS-Protection &quot;1; mode=block&quot; always;
+      # Proxy settings
+      client_max_body_size 4g;
+      location / {
+		      proxy_pass &amp;lt;http://owncloud:80&amp;gt;;
+		      proxy_set_header Host $host;
+		      proxy_set_header X-Real-IP $remote_addr;
+		      proxy_set_header X-Forwarded-For 127.0.0.1;
+		      proxy_set_header X-Forwarded-Proto $scheme;
+      }
+     location = /favicon.ico {
+          log_not_found off;
+          access_log off;
+          }
+      }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;到这里，基本上文件准备就已经完成了&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;docker-compose up -d # 运行项目
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;运行该项目，记住防火墙或者云服务器策略组打开80与443端口，该配置会将流量强制进行tls加密，对于个人云盘来说这是在数据存取得过程中很好的加密方式&lt;/h3&gt;
+&lt;p&gt;以上便是本篇文章的全部内容，感谢阅读&lt;/p&gt;
+</content:encoded></item><item><title>部署Chocolatey</title><link>https://fuwari.vercel.app/posts/%E9%83%A8%E7%BD%B2chocolatey/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/%E9%83%A8%E7%BD%B2chocolatey/</guid><pubDate>Thu, 20 Jun 2024 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;即使WIN系统下也可以实现命令行安装工具&lt;/h2&gt;
+&lt;p&gt;很多朋友可能还不熟悉这个工具，先简单介绍下Chocolatey是一个Windows平台上的包管理器，它允许用户通过命令行界面或图形用户界面轻松地安装、升级和卸载软件包。它的目标是简化Windows软件的安装和管理过程，类似于Linux上的包管理器（如apt、yum或dnf）&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;项目地址： &lt;a href=&quot;https://chocolatey.org/&quot;&gt;chocolatey.org&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;开始部署&lt;/h3&gt;
+&lt;h3&gt;确认系统环境环境&lt;/h3&gt;
+&lt;p&gt;根据官方指引在部署之前，你需要先确认系统环境及相关条件&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;客户机/服务器版的系统至少为Windows 7+ / Windows Server 2003+&lt;/li&gt;
+&lt;li&gt;管理员PowerShell命令行版本至少为v2+ (minimum is v3 for install from this website due to TLS 1.2 requirement)&lt;/li&gt;
+&lt;li&gt;&lt;a href=&quot;http://xn--49s319erjbwxt20aj60d.net/&quot;&gt;系统需要安装.NET&lt;/a&gt; Framework 4+ 插件&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;命令行界面部署&lt;/h3&gt;
+&lt;p&gt;以管理员身份打开PowerShell，输入命令并按Enter执行&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;Get-WindowsCapability -Online | Where-Object Name -like &apos;OpenSSH.Client*&apos; | Add-WindowsCapability -Online
+# 进度条读写完毕后，再次输入：
+Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString(&apos;&amp;lt;https://community.chocolatey.org/install.ps1&amp;gt;&apos;))
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;如无报错，此时Chocolatey应该已写入环境变量&lt;/h3&gt;
+&lt;p&gt;打开CMD(普通用户身份即可)&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;choco -v # 显示Chocolatey当前版本号
+choco -h # 显示工具相关指令帮助
+choco search &amp;lt;package&amp;gt; # 搜索安装包
+choco install &amp;lt;package&amp;gt; # 安装工具
+choco uninstall &amp;lt;package&amp;gt; # 卸载工具
+choco upgrade &amp;lt;package&amp;gt; # 更新工具
+# 示例
+choco install winfetch
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;以上便是本篇文章的全部内容&lt;/h3&gt;
+&lt;p&gt;感谢阅读&lt;/p&gt;
+</content:encoded></item><item><title>传输SCP工具</title><link>https://fuwari.vercel.app/posts/%E4%BC%A0%E8%BE%93scp%E5%B7%A5%E5%85%B7/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/%E4%BC%A0%E8%BE%93scp%E5%B7%A5%E5%85%B7/</guid><pubDate>Wed, 19 Jun 2024 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;Telnet和SSH都是用于远程连接的工具，但它们之间存在很大的差别
+国内的大多数基础教材还在教授使用telnet工具
+但telnet工具的传输过程是明文的，存在一定的安全性问题&lt;/p&gt;
+&lt;h2&gt;因此SSH工具更加安全、功能更强大、速度更快，更加适合在安全性要求较高的环境中使用&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;远程主机服务端相关配置&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;#安装`openssh-server`工具包
+sudo apt-get update &amp;amp;&amp;amp; sudo apt-get install openssh-server # Ubuntu/Debian
+sudo yum update &amp;amp;&amp;amp; sudo yum install openssh-server # CentOS/RHEL
+sudo dnf update &amp;amp;&amp;amp; sudo dnf install openssh-server # Cenos8/Fedora
+# 服务端启动相关服务并设置开机自启动
+sudo systemctl start --enable sshd # Ubuntu/Debian/CentOS/RHEL/Cenos8/Fedora
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;一般到这一步已经可以进行连接了，个人习惯开启&lt;code&gt;root&lt;/code&gt;用户登录模式(可选)&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;# 需要修改服务端配置文件
+nano /etc/ssh/sshd_config
+# 将以下内容取消注释或修改内容
+Port 22    # 默认连接端口为22，可以修改为自定义未占用端口
+ListenAddress 0.0.0.0 # 访问地址为任意地址
+ListenAddress ::
+PermitRootLogin yes # 允许root登录
+PubkeyAuthentication yes
+PasswordAuthentication yes
+# 完成后需要重启服务才会生效
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;本地主机客户端相关运用
+在服务端安装完成部署后，就可以使用ssh命令进行连接了，注意服务端一定要开放指定端口的防火墙规则&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;ssh username@remote_host        # username为访问用户名，remote_host为远程主机IP地址
+ssh -p 55 username@remote_host  # &quot;-p 55&quot;为访问指定55端口的sshd远程服务端
+# 远程连接就完成了，就是这么简单，别忘了输入密码，密码的输入是不会提示内容的，习惯就好
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;文件传输SCP工具相关运用
+该工具的使用是建立在SSH工具的基础之上的，所以在使用之前需要明确服务端已正常开启服务并且通信无阻(防火墙啊)&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;scp &apos;C:\\Users\\fukputin\\Downloads\\156.zip&apos; username@remote_host:/usr/bin
+# 意思是将本地文件名为156.zip的文件(绝对地址)发送到远程主机/usr/bin的目录下
+scp username@remote_host:/usr/bin/156.zip C:\\Users\\fukputin\\Downloads\\
+# 意思是将远程主机名为156.zip的文件取回到本地下载文件夹，可以以实际情况进行修改
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;那么如果是指定端口通信加上传输文件夹呢？其实很简单加上 &lt;code&gt;-p&lt;/code&gt; 和 &lt;code&gt;-r&lt;/code&gt; 即可&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;scp -p 55 -r &apos;C:\\Users\\fukputin\\Downloads\\&apos; username@remote_host:/usr/bin
+# 意思是将整个本地下载文件夹发送到远程主机/usr/bin的目录下
+scp -p 55 -r username@remote_host:/usr/bin/fukputin &apos;C:\\Users\\fukputin\\Downloads&apos;
+# 意思是将远程主机整个fukputin文件夹取回到本地下载的目录下
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;以上就是本章节的所有内容&lt;/p&gt;
+</content:encoded></item><item><title>Linux_LVM分区挂载</title><link>https://fuwari.vercel.app/posts/linuxlvm%E5%88%86%E5%8C%BA%E6%8C%82%E8%BD%BD/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/linuxlvm%E5%88%86%E5%8C%BA%E6%8C%82%E8%BD%BD/</guid><pubDate>Tue, 18 Jun 2024 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;对于分区的设置为LVM的格式就不再过多赘述了&lt;/h2&gt;
+&lt;p&gt;不是很明白LVM格式的可自行查阅相关资料&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;开始前需要查看磁盘状态&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;fdisk -l
+df -h
+# 列出磁盘上的当前分区信息
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;创建对应的分区表&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;# 假设物理磁盘为 /dev/sda
+parted /dev/sda # 使用parted工具对物理磁盘进行分区作业
+mklabel gpt # 在磁盘上创建一个新的 GPT（GUID 分区表）标签
+mkpart ESP 2048s 513M # 创建一个名为 ESP 的分区，从扇区 2048 开始，大小为 513MB
+mkpart primary 513M -1 # 创建一个主分区为 primary 的分区，从 513MB 处开始，直到磁盘的末尾用于存储操作系统和其他数据
+set 1 boot on # 设置第一个分区（即 ESP 分区）为引导分区，以便系统可以从中引导
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;写入保存退出后，此时分区表中会出现 /dev/sda1 与 /dev/sda2 两个分区&lt;/h3&gt;
+&lt;p&gt;/dev/sda1 分区为引导分区&lt;/p&gt;
+&lt;p&gt;/dev/sda2 分区为系统分区&lt;/p&gt;
+&lt;h3&gt;格式化引导分区&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;mkfs.fat -F32 /dev/sda1 # 在 /dev/sda1 上创建一个 FAT32 文件系统。FAT32 是一种通用的文件系统，适用于存储引导文件和其他数据
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;设置LVM物理卷&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;pvcreate /dev/sda2 # 将 /dev/sda2 设置为物理卷用于LVM
+vgcreate archlinux /dev/sda2 # 创建一个名为 archlinux 的卷组，使用 /dev/sda2 作为物理卷
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;设置交换分区&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;lvcreate -L 4G archlinux -n swap # 在 archlinux 卷组中创建一个4GB大小的交换分区
+mkswap /dev/mapper/archlinux-swap # 在 swap 逻辑卷上创建一个交换文件系统
+swapon /dev/mapper/archlinux-swap # 格式化并启用交换分区
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;设置系统分区&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;lvcreate -l +100%FREE archlinux -n root # 在 archlinux 卷组中创建一个名为 root 的逻辑卷，使用剩余的所有可用空间作为根文件系统
+mkfs.ext4 /dev/mapper/archlinux-root # 在 root 逻辑卷上创建一个 ext4 文件系统，用于存储操作系统和用户数据
+#至此，LVM分区就创建好了，我们可以使用：
+lvs # 命令检查LVM分区情况
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;LVM分区在高负载状态下对操作系统是存在一定影响的&lt;/h3&gt;
+&lt;p&gt;但同时有一定的安全性，稳定性&lt;/p&gt;
+&lt;h3&gt;对分区进行挂载&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Linux环境下的&lt;code&gt;/mnt&lt;/code&gt;目录可用于挂载，这里我们使用&lt;code&gt;mount&lt;/code&gt;命令&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;mount /dev/mapper/linux-root /mnt # 挂载系统分区
+mkdir -p /mnt/boot/efi # 创建efi引导启动目录
+mount /dev/sda1 /mnt/boot/efi # 将efi引导分区挂载启动目录
+&lt;/code&gt;&lt;/pre&gt;
+</content:encoded></item><item><title>Linux物理分区挂载</title><link>https://fuwari.vercel.app/posts/linux%E7%89%A9%E7%90%86%E5%88%86%E5%8C%BA%E6%8C%82%E8%BD%BD/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/linux%E7%89%A9%E7%90%86%E5%88%86%E5%8C%BA%E6%8C%82%E8%BD%BD/</guid><pubDate>Tue, 18 Jun 2024 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;在开始前首先需要注意三个关键要素&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;足够的物理存储空间&lt;/li&gt;
+&lt;li&gt;引导启动支持EFI模式&lt;/li&gt;
+&lt;li&gt;物理驱动器支持以 &lt;code&gt;root&lt;/code&gt;权限开展作业&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;首先进入U盘引导启动live系统&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;# 可以使用这条命令检查是否支持EFI模式
+ls /sys/firmware/efi/efivars # 出现内容则支持，反之无内容
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;在进行逻辑分区的过程中&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;# 可以用以下命令检查相关存储的工作状态
+lsblk # 用于显示系统上所有已挂载的块设备的信息
+fdisk -l # 查看系统上所有已挂载的磁盘分区的详细信息
+df -h # 用于显示文件系统的磁盘空间使用情况
+free -h # 用于显示系统内存的使用情况
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;接下来我们可以用 &lt;code&gt;cfdisk&lt;/code&gt;进行分区操作&lt;/h3&gt;
+&lt;p&gt;&lt;code&gt;cfdisk&lt;/code&gt;拟图形化的分区方式对小白比较友好&lt;/p&gt;
+&lt;h3&gt;分区过程中我们需要保证：&lt;/h3&gt;
+&lt;p&gt;创建一个EFI分区，具体大小根据计划的启动项而定，至少不少于600MB&lt;/p&gt;
+&lt;p&gt;创建一个SWAP交换分区，大小是物理内存的0.5倍&lt;/p&gt;
+&lt;p&gt;创建一个系统分区，可选择将 &lt;code&gt;/root&lt;/code&gt;目录与用户组的 &lt;code&gt;/home&lt;/code&gt;目录进行卷组分割&lt;/p&gt;
+&lt;h3&gt;保存分区配置可以选择write写入后quit退出完成操作&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;# 此时我们使用
+fdisk -l # 查看分区信息
+# 假设可以看到
+/dev/sda
+  /dev/sda1 # EFI 引导分区
+  /dev/sda2 # SWAP 交换分区
+  /dev/sda3 # SYSTEM 系统分区
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;接下来将进行分区格式化操作&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;mkfs.fat -F32 /dev/sda1 # 以FAT32格式格式化引导分区
+mkswap /dev/sda2 # 格式化交换分区
+mkfs.ext4 /dev/sda3 # 格式化系统分区
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;完成格式化后可分别对分区进行挂载&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;注：LIVE系统环境挂在逻辑分区
+Linux环境下的&lt;code&gt;/mnt&lt;/code&gt;目录可用于挂载，这里我们使用&lt;code&gt;mount&lt;/code&gt;命令&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;mount /dev/sda3 /mnt # 挂载系统分区
+mkdir -p /mnt/boot/efi # 创建efi引导启动目录
+mount /dev/sda1 /mnt/boot/efi # 将efi引导分区挂载启动目录
+swapon /dev/sda2 # 全局挂载交换分区
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;到这一步，我们已经可以对物理存储进行操作&lt;/h3&gt;
+&lt;p&gt;以上为本篇文章的全部内容，感谢阅读&lt;/p&gt;
+</content:encoded></item><item><title>地址与归属地</title><link>https://fuwari.vercel.app/posts/%E5%9C%B0%E5%9D%80%E4%B8%8E%E5%BD%92%E5%B1%9E%E5%9C%B0/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/%E5%9C%B0%E5%9D%80%E4%B8%8E%E5%BD%92%E5%B1%9E%E5%9C%B0/</guid><pubDate>Fri, 14 Jun 2024 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;公网IP是唯一的，由于目前的IPv4网络环境的急剧恶化
+基于动态地址的套娃现象层出不穷&lt;/p&gt;
+&lt;h2&gt;如何确认你当前的IP地址？&lt;/h2&gt;
+&lt;p&gt;输入以下命令即可查询本地公网IP绝对地址&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;curl ip.sb
+curl -L myip.ipip.net
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;但如果你的设备挂了代理或者其他工具，则需要以下命令&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;curl ipinfo.io/ip
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;当然如果你只需要查询局域网中由DHCP服务器分配的内网地址，只需要以下命令&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;ipconfig       # Windows环境下简单查询内网地址
+ipconfig /all  # Windows环境下详细查询内网地址
+ip addr        # Linux/Mac环境下查询网卡获取的当前内网地址
+&lt;/code&gt;&lt;/pre&gt;
+</content:encoded></item><item><title>UFW防火墙日常操作</title><link>https://fuwari.vercel.app/posts/ufw%E9%98%B2%E7%81%AB%E5%A2%99%E6%97%A5%E5%B8%B8%E6%93%8D%E4%BD%9C/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/ufw%E9%98%B2%E7%81%AB%E5%A2%99%E6%97%A5%E5%B8%B8%E6%93%8D%E4%BD%9C/</guid><pubDate>Sun, 02 Jun 2024 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;UFW是一款简单易用的防火墙工具，基于iptables&lt;/h2&gt;
+&lt;p&gt;安装方面就不细说了，可以根据你的系统拉取不同的镜像源安装，我们从启动开始&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;sudo ufw enable # 启动防火墙
+systemctl status ufw # 使用该工具的可查看后台运行情况
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;初始定义默认规则&lt;/h3&gt;
+&lt;p&gt;默认规则将确定未明确指定的流量如何处理&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;sudo ufw default deny incoming # 拒绝所有其他传入流量不包括SSH连接
+sudo ufw default allow outgoing # 允许所有传出流量
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;添加自定义规则&lt;/h3&gt;
+&lt;p&gt;允许特定端口的传入连接&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;sudo ufw allow &amp;lt;port_number&amp;gt; # 端口可以替换为任意
+# 允许特定IP地址的传入连接
+sudo ufw allow from &amp;lt;IP_address&amp;gt; # 地址为外部地址
+# 允许特定协议的传入连接
+sudo ufw allow &amp;lt;protocol&amp;gt; # 例如HTTP/S、ftp协议等等
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;当前防火墙状态&lt;/h3&gt;
+&lt;p&gt;查看当前的状态，允许或拒绝哪些规则&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;sudo ufw status # 查看规则描述
+sudo ufw status numbered # 查看规则编号
+# 删除某个特定规则可在已知规则编号的前提下进行
+sudo ufw delete &amp;lt;rule&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;通过使用UFW命令设置出入流量规则，你可以更好地控制系统和服务器上的网络流量。合理配置防火墙规则可以有效地保护系统免受潜在的威胁和攻击。记住，确保定期审查和更新规则以适应你的安全需求。以上便是本章节全部内容，希望能帮助你学会使用UFW防火墙的日常命令设置出入流量规则，提高系统的安全性&lt;/p&gt;
+</content:encoded></item><item><title>MySQL数据库操作</title><link>https://fuwari.vercel.app/posts/mysql%E6%95%B0%E6%8D%AE%E5%BA%93%E6%93%8D%E4%BD%9C/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/mysql%E6%95%B0%E6%8D%AE%E5%BA%93%E6%93%8D%E4%BD%9C/</guid><pubDate>Tue, 28 May 2024 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;MySQL是一种广泛使用的关系型数据库管理系统，为了有效地管理和操作数据库，我们可以使用命令行界面来执行各种任务。本文将详细介绍如何使用命令行界面进行MySQL数据库的日常操作，包括手动检查数据流程、手动创建数据表、手动导入数据库、手动删除数据库和手动删除数据表&lt;/p&gt;
+&lt;h2&gt;首先，确认权限&lt;/h2&gt;
+&lt;h3&gt;一般的mysql数据库相关账户信息可以在.env文件里界定&lt;/h3&gt;
+&lt;h3&gt;手动检查数据流程&lt;/h3&gt;
+&lt;p&gt;需要登陆数据库进行操作&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;mysql -u root -p # 输入命令以超级用户权限登录到数据库
+# 进入到数据库后，前缀会发生改变
+mysql&amp;gt; # 成功登录
+mysql&amp;gt; USE abc; # 选择abc数据库
+mysql&amp;gt; SHOW TABLES; # 检查表是否存在，存在则会产生表格
+mysql&amp;gt; SELECT * FROM lottery; # 当表存在时，可用于检测当前数据结构
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;当表不存在时，手动创建数据表方法&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;# 需要登陆数据库进行操作，进入数据库后
+mysql&amp;gt; USE abc; # 选择abc数据库
+# 为abc数据库创建包含七列数据的数据表
+mysql&amp;gt; CREATE TABLE abc (
+ col1 INT,
+ col2 INT,
+ col3 INT,
+ col4 INT,
+ col5 INT,
+ col6 INT,
+ col7 INT
+);
+mysql&amp;gt; SHOW TABLES; # 检查表是否成功创建
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;手动导入数据到库中，安全导入方式
+该操作不需要登陆数据库，可在外部导入后再登陆检查&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;mysql -u root -p -e &quot;SHOW VARIABLES LIKE &apos;secure_file_priv&apos;;&quot; # 检查可安全导入的目录
+cd /var/lib/mysql-files/ # 进入安全目录
+cp /home/admin/123.csv ./ # 将需要导入的数据表复制到安全目录
+mysql -u root -p -e &quot;USE abc; LOAD DATA INFILE &apos;/var/lib/mysql-files/123.csv&apos; INTO TABLE abc FIELDS TERMINATED BY &apos;,&apos; ENCLOSED BY &apos;\\&quot;&apos; LINES TERMINATED BY &apos;\\n&apos; IGNORE 1 LINES;&quot; # 手动导入数据表
+# 登陆数据库查看导入情况
+mysql&amp;gt; USE abc; # 选择abc数据库
+mysql&amp;gt; SELECT * FROM lottery; # 检测当前数据结构
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;手动删库环节，删库不删表&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;# 登陆数据库进行操作
+mysql&amp;gt; USE abc; # 选择abc数据库
+mysql&amp;gt; DELETE FROM abc; # 开心删库
+mysql&amp;gt; SELECT * FROM lottery; # 检查数据返回情况
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;手动删除数据表&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;# 登陆数据库进行操作
+mysql&amp;gt; USE abc; # 选择abc数据库
+mysql&amp;gt; DROP TABLE abc # 开心删表
+mysql&amp;gt; SHOW TABLES; # 检查表是否成功删除
+&lt;/code&gt;&lt;/pre&gt;
+&lt;hr /&gt;
+&lt;p&gt;以上是本章节全部内容，通过手动检查数据流程，我们可以确认数据库、数据表和数据的存在和状态。手动创建数据表可以根据需求定义表结构。手动导入数据库允许我们将数据从外部文件导入数据库表中。手动删除数据库和数据表可以帮助我们清除数据或重新设计数据库结构。通过掌握这些命令，您可以更好地管理和操作MySQL数据库。&lt;/p&gt;
+</content:encoded></item><item><title>nmap与zenmap</title><link>https://fuwari.vercel.app/posts/nmap%E4%B8%8Ezenmap/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/nmap%E4%B8%8Ezenmap/</guid><pubDate>Sat, 25 May 2024 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;之前看视频有些up主和些博主，在查看局域网下已连接的设备有哪些，经常需要切换到路由器后台仪表台进行查看，在出现故障时进不去后台时还需要console接入查看，也不是说该方法不正确，而是在某些情况下，说实话，不够效率&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;假如你当前已经有了nmap工具，那么仅需一条命令&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;sudo nmap -sP 10.0.0.0/24 # IP地址为网络地址，子网掩码为当前局域网dhcp服务器子网掩码
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;即可在短时间内查询并罗列所有当前局域网内所有连接并在线的设备&lt;/p&gt;
+&lt;h3&gt;当然，也有朋友说，这不是网工该会的&lt;/h3&gt;
+&lt;p&gt;确实，在网安领域nmap与zenmap是两种常用的网络扫描工具，它们在发现和评估网络上的漏洞和弱点方面发挥着重要作用，至于怎么使用关键在人好吧；本篇文章主要将介绍Nmap和zenmap工具的日常使用命令，并对它们的差异进行分析，包括原理、工作逻辑等方面&lt;/p&gt;
+&lt;h3&gt;Nmap工具&lt;/h3&gt;
+&lt;h3&gt;Nmap利用原始IP数据包发送和接收技术，实现对目标主机进行扫描；它通过发送特定类型的网络数据包，根据目标主机的响应判断目标主机的状态、开放的端口以及所运行的服务。Nmap采用了多种扫描技术，包括TCP SYN扫描、TCP connect()扫描、UDP扫描等；Nmap还具备灵活的脚本引擎，可以通过编写脚本进行自定义扫描和漏洞检测&lt;/h3&gt;
+&lt;h3&gt;命令使用&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;# nmap -A &amp;lt;目标IP&amp;gt;：操作系统版本深度探测、脚本扫描和Tracert等一系列高级扫描技术，这个选项可以提供更全面的信息
+# nmap -p &amp;lt;端口号&amp;gt; &amp;lt;目标IP&amp;gt;：扫描指定端口是否开放
+# nmap -O &amp;lt;目标IP&amp;gt;：进行操作系统探测，尝试识别目标主机的操作系统类型
+# nmap -sV &amp;lt;目标IP&amp;gt;：进行服务版本探测，尝试识别目标主机上运行的具体服务及其版本信息
+# nmap -T&amp;lt;0-5&amp;gt; &amp;lt;目标IP&amp;gt;：设置扫描速度，0为最慢，5为最快
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;当然还可以组合使用，比如：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;nmap -sS -Pn -T4 -v -O 192.168.1.1 # 假设目标地址为192.168.1.1
+# -sS：使用TCP SYN扫描方式，发送TCP SYN包到目标主机的指定端口，根据响应判断端口是否开放
+# -Pn：跳过主机发现阶段，这个选项告诉nmap不要执行主机存活探测，直接进行端口扫描
+# -T4：使用较高的扫描速度，T4表示快速扫描，上面已做区间值讲解不再赘述
+# -v：启用详细输出模式，这个选项会显示更多的扫描过程信息，包括扫描进度、发现的开放端口等
+# -O：进行操作系统基础探测，nmap会尝试识别目标主机所运行的操作系统类型和版本，相较于 -A 比较精简版
+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;作为常用工具特点&lt;/h3&gt;
+&lt;h3&gt;灵活多样的扫描技术：Nmap支持多种扫描技术，可以进行TCP和UDP端口扫描，操作系统和服务版本探测等&lt;/h3&gt;
+&lt;h3&gt;完善的脚本引擎：Nmap的脚本引擎可以执行自定义脚本，进行漏洞检测和扩展功能&lt;/h3&gt;
+&lt;h3&gt;多平台支持：Nmap可在多个操作系统上运行，包括Windows、Linux、Mac OS等&lt;/h3&gt;
+&lt;h3&gt;Zenmap工具&lt;/h3&gt;
+&lt;h3&gt;Zenmap是Nmap的官方图形化用户界面（GUI），它提供了一个用户友好的界面来配置和运行Nmap扫描；Zenmap能够帮助用户更直观地使用Nmap工具，尤其适用于那些对命令行不太熟悉或更喜欢图形界面的用户&lt;/h3&gt;
+&lt;h3&gt;由于Zenmap是基于Nmap的GUI，因此Nmap工具和命令的原理、工作逻辑等方面并没有本质的差异。它们都依赖于Nmap的扫描技术和功能来进行网络探测、端口扫描、操作系统探测和服务版本探测等&lt;/h3&gt;
+&lt;p&gt;以上便是本篇文章的所有内容，感谢阅读&lt;/p&gt;
+</content:encoded></item><item><title>Debian本地镜像源搭建</title><link>https://fuwari.vercel.app/posts/debian%E6%9C%AC%E5%9C%B0%E9%95%9C%E5%83%8F%E6%BA%90/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/debian%E6%9C%AC%E5%9C%B0%E9%95%9C%E5%83%8F%E6%BA%90/</guid><pubDate>Sun, 19 May 2024 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;首先说一下为什么要弄这事？&lt;/h2&gt;
+&lt;h3&gt;对于肉身在国内的朋友，Debian系的官方源镜像实在太慢，一般的系统更新只能依靠国内的源，如阿里源、腾讯源等厂商云，但如果你需要的是大规模部署，调用这些厂商源对公网上下行端口的负载是很大的，所以如果你只有一两台设备的更新需求，就没必要折腾这事了&lt;/h3&gt;
+&lt;h3&gt;部署一台用于同步的镜像软件源主机，只需要每日定时更新源主机的目录文件就好，内网的其他主机设备无需对外频繁通信，对内网某主机的安全性存在较高要求的，这种方式比较稳妥，另外更新流程只在内网状态下进行，那么就不必考虑出口带宽，同时避免许多公网上的流量监控，只需要考虑源主机软件包的安全性及GPG密钥的安全性即可&lt;/h3&gt;
+&lt;h3&gt;如果你是云服厂商，那么部署一台本地镜像软件源主机就很有必要了，毕竟用户每次租用设备一般都要先 &apos;apt update &amp;amp;&amp;amp; apt upgrade&apos; 极快的更新速度能够增强用户体验感，不像某些垃圾厂商只关注防火墙和策略组，当然这些也是必须的，可以做到虚拟主机的外层，而镜像软件源做在宿主机内层，层次化的安全策略更利于管理&lt;/h3&gt;
+&lt;h2&gt;注意存储空间限制&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;用于搭建镜像软件源的主机磁盘可用空间必须大于400TB(存在冗余)，主机小于350TB的可用空间无需考虑&lt;/li&gt;
+&lt;li&gt;本次搭建仅服务于 &lt;strong&gt;Debian10/11/12&lt;/strong&gt; 以及 &lt;strong&gt;ubuntu20/22&lt;/strong&gt; 系统，每增加一种系统预计需要增加230TB的可用空间&lt;/li&gt;
+&lt;li&gt;本次用于搭建的主机内存必须大于2G，交换分区必须大于内存的2倍，CPU核数不做过多要求，线程越多越好&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;开始搭建&lt;/h3&gt;
+&lt;p&gt;环境：首先新建一个Debian11的主机(可以是虚拟机)&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;sudo apt update &amp;amp;&amp;amp; sudo apt upgrade # 标准操作保持系统最新
+# 安装部署用的必备工具
+sudo apt install apache2 rsync e2fsck resize2fs lvextend # 假设使用LXC容器进行搭建，过程可能有扩容需求
+# 安装好后打开浏览器应该可以看到apache2的初始index.html页面，搭建完成后我们可以在浏览器看到所有的软件源；另外我们用于同步拉取软件源的是中科大USTC源，同步拉取使用rsync协议工具，而客户机使用则是通过HTTP协议进行更新源
+# 接下来，删除apache2初始页面并建立 debian/ 和 ubuntu 两个文件夹
+rm -r /var/www/html/index.html
+mkdir -p /var/www/html/debian &amp;amp;&amp;amp; mkdir -p /var/www/html/debian-security/
+mkdir -p /var/www/html/ubuntu
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;开始前可以用以下工具检查主机可用空间&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;fdisk -l
+df -h
+# 开始同步拉取
+rsync -avz --relative rsync://rsync.mirrors.ustc.edu.cn/debian/ /var/www/html/debian/
+rsync -avz --relative rsync://rsync.mirrors.ustc.edu.cn/debian-security/ /var/www/html/debian-security/
+rsync -avz --relative rsync://rsync.mirrors.ustc.edu.cn/ubuntu/ /var/www/html/ubuntu/
+# 如果中途出现中断的，可以用以下命令续上
+rsync -avzu --delete --relative --partial --update rsync://&amp;lt;源地址&amp;gt;/ /var/www/html/&amp;lt;本地目录&amp;gt;/
+# -a (--archive)：以归档模式同步文件，相当于-vrlptgoD选项的组合，其中包括递归地同步子目录、保留文件权限和时间、保留软链接等等
+# -v (--verbose)：输出详细信息，让你了解rsync命令正在做什么
+# -z (--compress)：对传输的文件进行压缩，可以加快传输速度
+# -u (--update)：仅同步源目录中更新的文件
+# --delete：将目标目录中源目录不存在的文件删除，保持目录同步
+# --partial：传输中断后可以从断点继续传输
+# --relative：使rsync将相对路径名写入目标目录中
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;经过漫长的等待，应该已经拉取完成，现在我们需要去每个软件源目录做Web后端的符号链接&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;cd /var/www/html/debian/ &amp;amp;&amp;amp; sudo ln -s README.html index.html
+cd /var/www/html/debian-security/ &amp;amp;&amp;amp; sudo ln -s README.security index.html
+cd /var/www/html/ubuntu/ &amp;amp;&amp;amp; sudo ln -s README.html index.html
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;完成后打开浏览器输入主机的本地内网地址，就可以看到刚刚同步的所有软件源了&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;借助cron工具立项配置每日凌晨2点定时更新&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;sudo nano /etc/crontab
+# 将以下内容加入文件内容的底部
+0 2 * * * rsync -avz --delete --partial --stats rsync://rsync.mirrors.ustc.edu.cn/debian/ /var/www/html/debian/ &amp;gt;&amp;gt; /var/log/cron.log 2&amp;gt;&amp;amp;1
+0 2 * * * rsync -avz --delete --partial --stats rsync://rsync.mirrors.ustc.edu.cn/debian-security/ /var/www/html/debian-security/ &amp;gt;&amp;gt; /var/log/cron.log 2&amp;gt;&amp;amp;1
+0 2 * * * rsync -avz --delete --partial --stats rsync://rsync.mirrors.ustc.edu.cn/ubuntu/ /var/www/html/ubuntu/ &amp;gt;&amp;gt; /var/log/cron.log 2&amp;gt;&amp;amp;1
+# 保存退出后我们需要重启以下cron服务
+sudo systemctl restart cron
+# 完成之后的每日更新状态我们只需要检查cron.log文件即可
+cat /var/log/cron.log
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;如何增强安全性及配置GPG密钥就不细说了，方法甚多建议查看: &lt;a href=&quot;https://mirrors.ustc.edu.cn/help/rsync-guide.html&quot;&gt;&lt;strong&gt;中科大源官方文档&lt;/strong&gt;&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;以上便是本篇全部内容，感谢阅读&lt;/p&gt;
+</content:encoded></item><item><title>搭建TLS加密线路</title><link>https://fuwari.vercel.app/posts/%E6%90%AD%E5%BB%BAtls%E5%8A%A0%E5%AF%86%E7%BA%BF%E8%B7%AF/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/%E6%90%AD%E5%BB%BAtls%E5%8A%A0%E5%AF%86%E7%BA%BF%E8%B7%AF/</guid><pubDate>Mon, 13 May 2024 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;开篇前还是那句老话：一款工具如何使用，是个人的意志决定的，工具本身没有好坏之分，请使用者自行斟酌&lt;/p&gt;
+&lt;h2&gt;声明： 本站不会承认该方案为原创&lt;/h2&gt;
+&lt;p&gt;本次搭建服务端使用的是带公网IP的VPS设备，当然原理都是相同，在内网或黑盒环境做也是没问题忽略掉第一步即可，别忘了网关服务器自行解析或者服务端内部直接IP定向；本次搭建使用docker容器进行，同时容器在使用过程中防第三方监听、渗透有奇效&lt;/p&gt;
+&lt;h3&gt;好，废话少说 现在开始&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;先梳理文件数据结构(工作目录)&lt;/li&gt;
+&lt;/ul&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;容器目录&lt;/th&gt;
+&lt;th&gt;一级目录&lt;/th&gt;
+&lt;th&gt;二级目录&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;网站证书密钥&lt;/td&gt;
+&lt;td&gt;web.key&lt;/td&gt;
+&lt;td&gt;\&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;网站证书文件&lt;/td&gt;
+&lt;td&gt;web.crt&lt;/td&gt;
+&lt;td&gt;\&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;代理证书密钥&lt;/td&gt;
+&lt;td&gt;proxy.key&lt;/td&gt;
+&lt;td&gt;\&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;代理证书文件&lt;/td&gt;
+&lt;td&gt;proxy.crt&lt;/td&gt;
+&lt;td&gt;\&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Trojan-go 配置文件&lt;/td&gt;
+&lt;td&gt;config.json&lt;/td&gt;
+&lt;td&gt;\&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;项目源码二进制文件提取&lt;/td&gt;
+&lt;td&gt;geoip.dat&lt;/td&gt;
+&lt;td&gt;\&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;项目源码二进制文件提取&lt;/td&gt;
+&lt;td&gt;geosite.dat&lt;/td&gt;
+&lt;td&gt;\&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;建立cointop容器及pull映像&lt;/td&gt;
+&lt;td&gt;docker-compose.yml&lt;/td&gt;
+&lt;td&gt;\&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;websocket通信协议指定目录，用户认证&lt;/td&gt;
+&lt;td&gt;proxy/&lt;/td&gt;
+&lt;td&gt;\&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;前端工具，定义劫持及流量转发&lt;/td&gt;
+&lt;td&gt;nginx/&lt;/td&gt;
+&lt;td&gt;nginx.conf&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;ul&gt;
+&lt;li&gt;再梳理工作逻辑&lt;/li&gt;
+&lt;/ul&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;客户机访问&lt;/th&gt;
+&lt;th&gt;流量发送到服务&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;正常网站访问&lt;/td&gt;
+&lt;td&gt;(前端劫持+分流规则)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Trojan 协议访问(后端线路)&lt;/td&gt;
+&lt;td&gt;非正确 Trojan 协议访问(重定向到前端劫持的网站)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;非常规 (扫描) 等被动攻击访问&lt;/td&gt;
+&lt;td&gt;(重定向到前端劫持的网站)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2&gt;搭建执行工作的逻辑文件目录&lt;/h2&gt;
+&lt;h3&gt;证书要搞2套4份，具体怎么搞就不说了，本站有文章&lt;/h3&gt;
+&lt;h3&gt;使用git工具拉取 &lt;a href=&quot;https://github.com/p4gefau1t/trojan-go&quot;&gt;trojan-go项目源码&lt;/a&gt; 或者 &lt;a href=&quot;https://github.com/p4gefau1t/trojan-go/releases&quot;&gt;直接下载项目releases文件对应的系统版本&lt;/a&gt; 并解压提取geoip.dat和geosite.dat复制到工作目录下&lt;/h3&gt;
+&lt;h3&gt;建立docker-compose.yml文件(使用docker run同理)，如下内容&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;services:
+ trojan-go:
+   container_name: trojan-go
+   image: teddysun/trojan-go
+   volumes:
+     - ./:/etc/trojan-go/
+   restart: always
+   network_mode: &quot;host&quot;
+   # 使用宿主机网络，以保证与nginx容器处于同一网段
+   depends_on:
+     - nginx
+     # 在nginx容器已启动的状态下启动
+
+ nginx:
+   image: nginx
+   restart: always
+   container_name: nginx
+   network_mode: &quot;host&quot;
+   environment:
+     - TZ=Asia/Shanghai
+   ports:
+     - &quot;80:80&quot;
+     - &quot;443:443&quot;
+     - &quot;445&quot;
+     - &quot;1443&quot;
+   volumes:
+     - ./:/etc/trojan-go/
+     - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+     - ./nginx/logs/:/etc/nginx/logs/
+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;建立nginx/nginx.conf文件(定义前端劫持及分流规则)&lt;/h3&gt;
+&lt;p&gt;需要修改的部分注意看代码注释，千万不要遗漏，任何遗漏都会导致运行失败&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;    user nginx;
+    worker_processes auto;
+    error_log  logs/error.log;
+    error_log  logs/error.log  notice;
+    error_log  logs/error.log  info;
+
+    pid        logs/nginx.pid;
+
+    include /usr/share/nginx/modules/*.conf;
+
+    events {
+        worker_connections 2048; # 最大连接数可根据服务器性能调低
+    }
+
+    stream {
+        map $ssl_preread_server_name $backend_name {
+            web.net web; # 修改为你的网站域名(非劫持域名)
+            proxy.net trojan; # 修改为你的Trojan协议网站域名
+        }
+
+        upstream web {
+            server 127.0.0.1:1443;
+        }
+
+        upstream trojan {
+            server 127.0.0.1:445;
+        }
+
+        server {
+            listen 443 reuseport;
+            listen [::]:443 reuseport;
+            proxy_pass  $backend_name;
+            ssl_preread on;
+        }
+    }
+
+    http {
+
+       server {
+          listen 1443 ssl http2;
+          server_name web.net; # 修改为你的网站域名(非劫持域名)
+
+          ssl_certificate       /etc/trojan-go/web.crt;
+          ssl_certificate_key   /etc/trojan-go/web.key;
+
+          ssl_session_cache shared:SSL:1m;
+          ssl_session_timeout 5m;
+          ssl_session_tickets off;
+
+          ssl_protocols         TLSv1.2 TLSv1.3;
+          ssl_ciphers           ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
+          ssl_prefer_server_ciphers on;
+
+          location / {
+               proxy_pass &amp;lt;https://hijack.net&amp;gt;; # 修改为你将要劫持的域名url
+               proxy_ssl_server_name on;
+               proxy_redirect off;
+               sub_filter_once off;
+               sub_filter &quot;hijack.net&quot; $server_name; # 修改为你将要劫持的域名
+               proxy_set_header Host &quot;hijack.net&quot;; # 修改为你将要劫持的域名
+               proxy_set_header Referer $http_referer;
+               proxy_set_header X-Real-IP $remote_addr;
+               proxy_set_header User-Agent $http_user_agent;
+               proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+               proxy_set_header X-Forwarded-Proto https;
+               proxy_set_header Accept-Encoding &quot;&quot;;
+               proxy_set_header Accept-Language &quot;zh-CN&quot;;
+                      }
+
+            }
+
+        server {
+            listen       1443 ssl http2;
+            server_name  proxy.net; # 修改为你的Trojan协议网站域名
+
+            ssl_certificate      /etc/trojan-go/proxy.crt;
+            ssl_certificate_key  /etc/trojan-go/proxy.key;
+
+            ssl_session_cache    shared:SSL:1m;
+            ssl_session_timeout  5m;
+
+            ssl_protocols        TLSv1.2 TLSv1.3;
+            ssl_ciphers          ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
+            ssl_prefer_server_ciphers  on;
+
+            location / {
+               proxy_pass &amp;lt;https://hijack.net&amp;gt;; # 修改为你将要劫持的域名url
+               proxy_ssl_server_name on;
+               proxy_redirect off;
+               sub_filter_once off;
+               sub_filter &quot;hijack.net&quot; $server_name; # 修改为你将要劫持的域名
+               proxy_set_header Host &quot;hijack.net&quot;; # 修改为你将要劫持的域名
+               proxy_set_header Referer $http_referer;
+               proxy_set_header X-Real-IP $remote_addr;
+               proxy_set_header User-Agent $http_user_agent;
+               proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+               proxy_set_header X-Forwarded-Proto https;
+               proxy_set_header Accept-Encoding &quot;&quot;;
+               proxy_set_header Accept-Language &quot;zh-CN&quot;;
+            }
+        }
+
+        server {
+            listen 80;
+            server_name web.net; # 修改为你的网站域名(非劫持域名)
+            rewrite ^(.*)$ &amp;lt;https://$&amp;gt;{server_name}$1 permanent;
+               }
+    }
+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;建立config.json配置文件&lt;/h3&gt;
+&lt;p&gt;需要修改的部分我就不注释了，因为配置文件运行容易报错，我简单说一下&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&quot;sni&quot; 和 &quot;hostname&quot; 修改为你的Trojan协议网站域名&lt;/li&gt;
+&lt;li&gt;&quot;password&quot; 修改为你需要设置的密码，客户机连接会用到&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;# 文件内容如下
+{
+      &quot;run_type&quot;: &quot;server&quot;,
+      &quot;local_addr&quot;: &quot;127.0.0.1&quot;,
+      &quot;local_port&quot;: 445,
+      &quot;remote_addr&quot;: &quot;127.0.0.1&quot;,
+      &quot;remote_port&quot;: 80,
+      &quot;password&quot;: [
+          &quot;custom-password&quot;
+      ],
+      &quot;ssl&quot;: {
+          &quot;cert&quot;: &quot;/etc/trojan-go/proxy.crt&quot;,
+          &quot;key&quot;: &quot;/etc/trojan-go/proxy.key&quot;,
+          &quot;sni&quot;: &quot;proxy.net&quot;,
+          &quot;fallback_addr&quot;: &quot;127.0.0.1&quot;,
+          &quot;fallback_port&quot;: 1443
+      },
+      &quot;router&quot;: {
+          &quot;enabled&quot;: true,
+          &quot;block&quot;: [
+              &quot;geoip:private&quot;
+          ],
+          &quot;geoip&quot;: &quot;/etc/trojan-go/geoip.dat&quot;,
+          &quot;geosite&quot;: &quot;/etc/trojan-go/geosite.dat&quot;
+      },
+
+      &quot;websocket&quot;: {
+          &quot;enabled&quot;: true,
+          &quot;path&quot;: &quot;/etc/trojan-go/proxy&quot;,
+          &quot;hostname&quot;: &quot;proxy.net&quot;
+      }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2&gt;完成以上五个步骤所需的内容基本就搞定了&lt;/h2&gt;
+&lt;h3&gt;接下来就是部署容器，启用服务端&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;docker-compose up -d # 运行容器
+docker-compose logs # 检查容器运行情况
+&lt;/code&gt;&lt;/pre&gt;
+&lt;hr /&gt;
+&lt;h2&gt;客户端测试&lt;/h2&gt;
+&lt;p&gt;可以使用trojan协议的客户端有很多，需要自行尝试，我以clash为例配置为：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;- {name: MySVR, server: web.net, port: 443, type: trojan, password: custom-password, sni: proxy.net, skip-cert-verify: false, udp: true, network: ws, ws-opts: {path: /etc/trojan-go/proxy, headers: {Host: proxy.net}}}
+# 客户端除server使用网站域名以外，所有内容根据第五步配置文件进行调整
+&lt;/code&gt;&lt;/pre&gt;
+&lt;hr /&gt;
+&lt;h3&gt;可选：物理机搭建注意事项&lt;/h3&gt;
+&lt;h3&gt;有些童鞋不喜欢使用docker就要用物理机+项目源码的方式搭建，当然可以&lt;/h3&gt;
+&lt;p&gt;你需要先修改nginx.conf文件的头部为：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;user nginx;
+worker_processes auto;
+error_log /var/log/nginx/error.log;
+pid /run/nginx.pid;
+include /usr/share/nginx/modules/*.conf;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;还有就是需要注意nginx有可能在启动时会报错&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;systemctl status nginx # 查看运行情况
+/usr/sbin/nginx -t -q # 查看报错信息
+# 当出现 [emerg] getpwnam(&quot;nginx&quot;) failed 的错误信息，你需要
+useradd -s /bin/false nginx # 加权
+# 当出现 [emerg] unknown directive &quot;stream&quot; 的错误信息，你需要
+load_module /usr/lib/nginx/modules/ngx_stream_module.so; # debian环境下加载模组
+load_module &apos;/usr/lib64/nginx/modules/ngx_stream_module.so&apos;; # centos环境下加载模组
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;将模组加入nginx.conf文件的头部即可，根据自己的系统二选一加入，不要无脑全复制
+以上便是本章节全部内容&lt;/p&gt;
+</content:encoded></item><item><title>云原生部署redis服务</title><link>https://fuwari.vercel.app/posts/%E4%BA%91%E5%8E%9F%E7%94%9F%E9%83%A8%E7%BD%B2redis%E6%9C%8D%E5%8A%A1/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/%E4%BA%91%E5%8E%9F%E7%94%9F%E9%83%A8%E7%BD%B2redis%E6%9C%8D%E5%8A%A1/</guid><pubDate>Sat, 20 Apr 2024 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;本文主要讲解云原生部署redis中间件的详细步骤&lt;/h2&gt;
+&lt;h3&gt;部署环境&lt;/h3&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;类型&lt;/th&gt;
+&lt;th&gt;操作系统&lt;/th&gt;
+&lt;th&gt;内核版本&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;云原生&lt;/td&gt;
+&lt;td&gt;Redhat7.9&lt;/td&gt;
+&lt;td&gt;Linux-3.10.0&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3&gt;源码编译部署&lt;/h3&gt;
+&lt;h3&gt;下载redis版本5.0.14&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;wget http://download.redis.io/releases/redis-5.0.14.tar.gz
+# 验证目录下redis-5.0.14.tar.gz文件
+tar -xzvf redis-5.0.14.tar.gz # 文件解压缩
+ls redis-5.0.14/ # 验证工程目录
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;验证gcc/g++/tcl编译环境&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;gcc -v # 至少为4.8.5版本
+g++ -v # 至少为4.8.5版本
+tclsh # 进入tcl环境
+    info patchlevel # 至少为8.5.13版本
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;进入工程目录编译安装&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;cd redis-5.0.14/ &amp;amp;&amp;amp; pwd # 打印内容处于工程目录中
+make test # 进行测试编译
+make install # 如无报错则进行安装并配置环境变量
+ls /usr/local/bin/redis* # 验证工具
+# ls /usr/local/bin/redis*
+# /usr/local/bin/redis-benchmark  /usr/local/bin/redis-check-rdb  /usr/local/bin/redis-sentinel
+# /usr/local/bin/redis-check-aof  /usr/local/bin/redis-cli        /usr/local/bin/redis-server
+# 此时已完成安装，建议增加服务软连接
+ln -sf /usr/local/bin/redis-server /usr/bin/redis
+redis -v # 验证安装
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;以上为本篇文章的全部内容&lt;/h3&gt;
+&lt;h3&gt;感谢阅读&lt;/h3&gt;
+</content:encoded></item><item><title>Linux查找筛选改写</title><link>https://fuwari.vercel.app/posts/linux%E6%9F%A5%E6%89%BE%E7%AD%9B%E9%80%89%E6%94%B9%E5%86%99/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/linux%E6%9F%A5%E6%89%BE%E7%AD%9B%E9%80%89%E6%94%B9%E5%86%99/</guid><pubDate>Sat, 09 Mar 2024 00:00:00 GMT</pubDate><content:encoded>&lt;blockquote&gt;
+&lt;p&gt;本期文章主要针对Linux环境下常用的运维技巧进行梳理&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h3&gt;内容来源于网络，本文仅作整理，作用与否请自行测试&lt;/h3&gt;
+&lt;h3&gt;废话少说，实操部分&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;find快速查找文件&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;find /usr/bin -name &quot;cat&quot; # 快速查找/usr/bin目录下是否存在cat文件
+find /usr/bin -name &quot;ca*&quot; # 快速查找/usr/bin目录下是否包含ca字符的文件
+find /etc -name &quot;bash.bashrc&quot; | xargs -i cat {} # 快速查找/etc目录下的bash.bashrc文件并根据查询结果打印文件内容
+# 花括号占位符前可跟其他命令进行替换
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;grep快速查看文件中的关键配置&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;grep Port /etc/ssh/sshd_config # 快速查看OpenSSH工具所使用的端口
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;sed免交互快速修改配置&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;sed &apos;s/Port 22/Port 25/&apos; /etc/ssh/sshd_config # 临时修改远程工具OpenSSH的端口为25
+sed -i &apos;s/Port 22/Port 25/&apos; /etc/ssh/sshd_config # 将远程工具OpenSSH的默认端口修改为25并执行写入
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;sort对数据类文本进行排序&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;sort -n 123.txt # 对文本内的数字进行正向排序并打印
+sort -n -r 123.txt # 对文本内的数字进行逆向排序并打印
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;EOF免交互创建/增加文件内容&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;以上便是本章节全部内容&lt;/h3&gt;
+&lt;h3&gt;感谢阅读&lt;/h3&gt;
+</content:encoded></item><item><title>LXDM与Fluxbox</title><link>https://fuwari.vercel.app/posts/lxdm%E4%B8%8Efluxbox/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/lxdm%E4%B8%8Efluxbox/</guid><pubDate>Sat, 13 Jan 2024 00:00:00 GMT</pubDate><content:encoded>&lt;h3&gt;由于网络上这类的资料文档比较少，本篇文章仅做汇总&lt;/h3&gt;
+&lt;h2&gt;为什么使用这类冷门图形环境？&lt;/h2&gt;
+&lt;h3&gt;为了应用性能最大化&lt;/h3&gt;
+&lt;hr /&gt;
+&lt;h3&gt;LXDM登陆器作为用户访问控制，Fluxbox负责窗口桌面环境，这两个轻量级工具均是基于X11桌面环境，相较于Wayland没那么新，但稳定姓更好&lt;/h3&gt;
+&lt;h3&gt;工作目录汇总&lt;/h3&gt;
+&lt;h3&gt;LXDM登陆器&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;ls /usr/bin/lxdm # 工具路径
+ls /usr/lib/lxdm # 组件及环境变量路径
+cat /etc/lxdm/lxdm.conf # 登陆器配置文件路径
+ls /usr/share/lxdm/themes/ # 工具主题路径
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;Fluxbox窗口桌面&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;ls /usr/bin/fluxbox # 工具路径
+ls /usr/share/fluxbox # 菜单及配置信息路径
+ls /usr/share/fluxbox/styles/ # 工具对应系统主题路径
+ls /home/$USER/.fluxbox/ # 工具对应用户配置信息路径
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;LXDM登陆器自定义配置&lt;/h3&gt;
+&lt;h3&gt;编辑配置文件&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;vim /etc/lxdm/lxdm.conf
+[display]
+gtk_theme=Adwaita # 选择gtk主题
+bottom_pane=1 # 是否显示桌面环境选择按钮
+lang=0 # 是否显示语言选择按钮
+keyboard=0 # 是否显示键盘方案选择按钮
+theme=BlackArch # 选择工具主题，壁纸已在主题中进行配置
+[input]
+[userlist]
+disable=1 # 是否关闭用户选择列表(建议关闭)
+white= # 用户白名单
+black= # 用户黑名单
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;关于登陆器用户的访问控制权限设定&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;vim /etc/pam.d/lxdm # 编辑登陆用户的相关权限
+#%PAM-1.0
+#auth        include     system-login   允许所有用户通过lxdm登陆桌面环境
+auth        required    pam_succeed_if.so user != root quiet # 不允许超级用户通过lxdm登陆桌面环境
+# 禁用特定用户访问也使用相同方法，配置时注意互斥关系
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;Fluxbox窗口桌面配置壁纸&lt;/h3&gt;
+&lt;h3&gt;配置壁纸使用fbsetbg工具，该工具需要feh或者其他依赖工具才会生效&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;fbsetbg /home/$USER/.fluxbox/backgrounds/wallpaper.jpg
+# 该命令会将路径下的wallpaper.jpg平铺作为当前壁纸
+cat /home/$USER/.fluxbox/lastwallpaper
+# $full $full|/home/$USER/.fluxbox/backgrounds/wallpaper.jpg||:0
+# 如果反馈的信息如此，则配置生肖，当然也可以手动写入刷新桌面也生效
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;Fluxbox应用菜单自定义配置&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;[begin] (菜单起始)
+[exec] (终端) {xterm}
+[submenu] (文件夹)
+      [exec] (应用) {} # {}为应用路径或启动命令
+[end] # 文件夹结束
+[endencoding] # 分割线
+[exit] (注销)
+[end] # 菜单结束
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;Fluxbox调用终端界面执行状态&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;[exec] (执行结束保留终端窗口) {xterm -e sh -c &apos;uname -a ; bash&apos;}
+[exec] (执行结束关闭终端窗口) {xterm -e sh -c &apos;uname -a&apos;}
+[exec] (系统调用终端执行) {xterm -e sudo sh -c &apos;uname -a&apos;}
+[exec] (远程工具调用) {putty}
+# 以上是部分应用的启动及相关调用方法逻辑
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;Xterm工具窗口大小的配置&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;vim /home/$USER/.Xresources
+# 编辑配置文件信息，可调整中文字体、英文字体、字体大小、窗口大小等信息
+XTerm*faceNameDoublesize: Microsoft YaHei UI
+XTerm*faceName: DejaVu Sans Mono
+xterm*faceSize: 14
+xterm*vt100*geometry: 115x32
+xterm*saveLines: 16384
+xterm*termName: xterm-color
+xterm*eightBitInput: false
+xterm*background: black
+xterm*foreground: #EAEAEF
+# 保存退出后，执行以下命令生效：
+xrdb -merge .Xresources
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;Linux环境下手动部署字体&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;ls -l /usr/share/fonts # 该目录下已包含系统所有字体
+fc-list # 查看系统已加载的所有字体
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;其他配置&lt;/h3&gt;
+&lt;h3&gt;有些笔记本电脑对Fluxbox桌面环境下休眠的适配不好，盒盖或休眠状态无法唤醒的&lt;/h3&gt;
+&lt;h3&gt;可以尝试将休眠和熄屏禁用&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;# 配置休眠禁用
+vim /etc/systemd/logind.conf
+[Login]
+HandleLidSwitch=lock # 锁定休眠功能
+# 配置熄屏禁用
+vim /usr/share/X11/xorg.conf.d/10-monitor.conf # 没有该文件进行创建
+Section &quot;ServerLayout&quot;
+    Identifier &quot;ServerLayout0&quot;
+    Option &quot;BlankTime&quot; &quot;0&quot;
+    Option &quot;StandbyTime&quot; &quot;0&quot;
+    Option &quot;SuspendTime&quot; &quot;0&quot;
+    Option &quot;OffTime&quot; &quot;0&quot;
+EndSection
+# 重启后生效
+reboot
+&lt;/code&gt;&lt;/pre&gt;
+&lt;hr /&gt;
+&lt;h3&gt;其实还有关于屏幕旋转、触摸等等相关配置&lt;/h3&gt;
+&lt;h3&gt;屏幕旋转建议使用plasma-open-settings的kscreen组件进行配置&lt;/h3&gt;
+&lt;h3&gt;如果使用完全修改配置文件的形式修改屏幕旋转会比较麻烦，同样是修改xorg.conf.d文件里的配置信息&lt;/h3&gt;
+&lt;h3&gt;方法请自行研究，就不再过多赘述&lt;/h3&gt;
+&lt;p&gt;以上为本章节全部内容，感谢阅读&lt;/p&gt;
+</content:encoded></item><item><title>DebianCli汉化</title><link>https://fuwari.vercel.app/posts/debiancli%E6%B1%89%E5%8C%96/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/debiancli%E6%B1%89%E5%8C%96/</guid><pubDate>Fri, 16 Jun 2023 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;这篇文章主要针对的是远程连接(ssh/telnet)状态下的汉化&lt;/h2&gt;
+&lt;h3&gt;不是你直连显示器，或者在本地(noVNC)看到的样子，不要弄混了不然会乱码&lt;/h3&gt;
+&lt;p&gt;另外在你用于建立连接的图形化终端首先得保证具备了utf-8编码的中文
+当然，如果你是用XShell或者Finalshell这类的第三方工具，那可以不用看了&lt;/p&gt;
+&lt;h3&gt;部署中文字体&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;sudo apt install vim xfonts-intl-chinese xfonts-wqy fonts-noto-cjk
+# 修改&amp;amp;增加系统字体
+sudo vim /etc/locale.gen
+# 取消掉`#`的注释，确保以下字体被选中
+en_US.UTF-8 UTF-8
+zh_CN GB2312
+zh_CN.GBK GBK
+zh_CN.UTF-8 UTF-8
+# 执行命令生效
+sudo locale-gen
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;配置系统默认的语言，这里注意必须是管态才能写入&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;echo &apos;LANG=zh_CN.UTF-8&apos;  &amp;gt; /etc/locale.conf
+echo &apos;LANG=zh_CN.UTF-8&apos;  &amp;gt; /etc/default/locale
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;配置系统环境默认语言，这里同样是管态才能写入&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;sudo vim /etc/environment
+# 增加以下内容
+LANG=&quot;zh_CN.GB2312&quot; LC_ALL=&quot;zh_CN.GBK&quot;
+# 最后重启系统就可以生效了
+reboot
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;这样汉化并不是全局汉化，只是SHELL部分优先中文显示，但也相对省事&lt;/h3&gt;
+&lt;p&gt;也有些人会说并不用安装字体，也能生效
+但如果后续要部署gnome或者KDE等这类图形化界面，安装字体会让你更舒服&lt;/p&gt;
+</content:encoded></item><item><title>Docker代理配置</title><link>https://fuwari.vercel.app/posts/docker%E4%BB%A3%E7%90%86%E9%85%8D%E7%BD%AE/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/docker%E4%BB%A3%E7%90%86%E9%85%8D%E7%BD%AE/</guid><pubDate>Mon, 12 Jun 2023 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;由于环境恶劣，在构建容器时会出现Pull失败
+你需要代理，需要代理，需要代理&lt;/p&gt;
+&lt;h2&gt;怎么做？&lt;/h2&gt;
+&lt;p&gt;创建代理配置文件&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;mkdir -p /etc/systemd/system/docker.service.d
+nano /etc/systemd/system/docker.service.d/proxy.conf
+# 加入以下内容
+[Service]
+Environment=&quot;HTTP_PROXY=http://&amp;lt;your_proxy_address&amp;gt;:7890/&quot;
+Environment=&quot;HTTPS_PROXY=http://&amp;lt;your_proxy_address&amp;gt;:7890/&quot;
+Environment=&quot;NO_PROXY=localhost,127.0.0.1,.example.com&quot;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;重启docker服务，配置生效&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;systemctl daemon-reload
+systemctl restart docker.service
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2&gt;感谢阅读&lt;/h2&gt;
+</content:encoded></item><item><title>Shell环境调优</title><link>https://fuwari.vercel.app/posts/shell%E7%8E%AF%E5%A2%83%E8%B0%83%E4%BC%98/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/shell%E7%8E%AF%E5%A2%83%E8%B0%83%E4%BC%98/</guid><pubDate>Tue, 16 May 2023 00:00:00 GMT</pubDate><content:encoded>&lt;h1&gt;本文主要适用于美化自定义 Shell 环境&lt;/h1&gt;
+&lt;hr /&gt;
+&lt;h2&gt;&lt;code&gt;BASH&lt;/code&gt; 根据第三方工具环境优化&lt;/h2&gt;
+&lt;h3&gt;切换环境变量&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;    bash bash-completion curl git # 安装工具组件
+    echo $SHELL                   # 查看当前使用的命令行环境
+    cat /etc/shells               # 查看当前已安装的环境
+    chsh -s /bin/bash             # 切换环境
+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;安装 &lt;a href=&quot;https://github.com/ohmysh/ohmysh&quot;&gt;ohmysh&lt;/a&gt;&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;    git clone &amp;lt;https://github.com/ohmysh/ohmysh.git&amp;gt; &amp;amp;&amp;amp; cd ohmysh/
+    bash install.sh
+    source .bashrc
+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;切换主题与插件&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;    oms -t list
+    oms -t brainy
+    oms -p list
+    oms -p enable &amp;lt;plugin&amp;gt;
+    oms -p disable &amp;lt;plugin&amp;gt;
+    oms -p restart &amp;lt;plugin&amp;gt;
+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;hr /&gt;
+&lt;h2&gt;&lt;code&gt;ZSH&lt;/code&gt; 根据第三方工具环境优化&lt;/h2&gt;
+&lt;h3&gt;切换环境变量&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;    zsh zsh-completions           # 安装工具组件
+    echo $SHELL                   # 查看当前使用的命令行环境
+    cat /etc/shells               # 查看当前已安装的环境
+    chsh -s /bin/zsh              # 切换环境
+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;安装 &lt;a href=&quot;https://github.com/ohmyzsh/ohmyzsh&quot;&gt;ohmyzsh&lt;/a&gt;&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;    wget &amp;lt;https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh&amp;gt;
+    sh install.sh
+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;切换主题与插件&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;    cd ~/.oh-my-zsh/themes
+    yay -S bc
+    wget &amp;lt;https://github.com/bashelled/shini/raw/master/shini.zsh-theme&amp;gt;
+    wget &amp;lt;https://github.com/dersam/staples/raw/master/staples.zsh-theme&amp;gt;
+    wget &amp;lt;https://raw.githubusercontent.com/ChesterYue/ohmyzsh-theme-passion/master/passion.zsh-theme&amp;gt;
+    cd ~/.oh-my-zsh/plugins
+    git clone &amp;lt;https://github.com/zsh-users/zsh-completions.git&amp;gt;
+    git clone &amp;lt;https://github.com/zsh-users/zsh-syntax-highlighting.git&amp;gt;
+    git clone &amp;lt;https://github.com/zsh-users/zsh-autosuggestions&amp;gt;
+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;部署配置&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;    pacman -S fzf
+    cd ~/
+    vim .zshrc
+    source .zshrc
+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;主题介绍: &lt;a href=&quot;https://github.com/ohmyzsh/ohmyzsh/wiki/External-themes&quot;&gt;wiki&lt;/a&gt;&lt;/h3&gt;
+&lt;h3&gt;插件介绍: &lt;a href=&quot;https://github.com/zsh-users/zsh-syntax-highlighting&quot;&gt;Highlight&lt;/a&gt;&lt;/h3&gt;
+&lt;h3&gt;插件介绍: &lt;a href=&quot;https://github.com/zsh-users/zsh-autosuggestions&quot;&gt;Autocomplete&lt;/a&gt;&lt;/h3&gt;
+&lt;hr /&gt;
+&lt;h2&gt;&lt;code&gt;ccat&lt;/code&gt; 安装&lt;/h2&gt;
+&lt;pre&gt;&lt;code&gt;    wget &amp;lt;https://github.com/jingweno/ccat/releases/download/v1.1.0/linux-amd64-1.1.0.tar.gz&amp;gt;
+    tar xfz linux-amd64-1.1.0.tar.gz
+    sudo cp linux-amd64-1.1.0/ccat /usr/local/bin/
+    sudo chmod +x /usr/local/bin/ccat
+
+&lt;/code&gt;&lt;/pre&gt;
+</content:encoded></item><item><title>Linux系统常用命令</title><link>https://fuwari.vercel.app/posts/linux%E5%B8%B8%E7%94%A8%E5%91%BD%E4%BB%A4/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/linux%E5%B8%B8%E7%94%A8%E5%91%BD%E4%BB%A4/</guid><pubDate>Fri, 14 Apr 2023 00:00:00 GMT</pubDate><content:encoded>&lt;h1&gt;本文主要介绍linux系统的日常操作命令&lt;/h1&gt;
+&lt;hr /&gt;
+&lt;h2&gt;基础命令&lt;/h2&gt;
+&lt;h3&gt;文件及指令操作&lt;/h3&gt;
+&lt;h3&gt;目录操作&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;    ls -l       # 打印文件详细信息
+    ls -a       # 打印所有文件包括隐藏文件
+    ls -lh      # 以人类语言展示文件详细信息
+    —sort=size  # 展示文件大小
+    —sort=time  # 展示文件创建或修改时间
+    pwd         # 展示当前路径
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;&lt;code&gt;cd&lt;/code&gt; 操作&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;    cd /path    # 进入目录
+    cd .        # 进入当前目录
+    cd ..       # 进入上一层目录
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;&lt;code&gt;阅读&lt;/code&gt; 操作&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;    cat /etc/resolv.conf                 # 展示文件详细内容
+    more /etc/resolv.conf                # 分段展示文件内容
+    less /etc/resolv.conf                # 可控状态展示文件内容
+    tail -20 /etc/resolv.conf            # 展示文件最后20行
+    watch -n 2 tail -20 /etc/resolv.conf # 每2秒展示文件最后20行有没有更新
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;&lt;code&gt;删除&lt;/code&gt; 操作&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;    rm -r /path/         # 删除文件夹
+    rm /etc/resolv.conf  # 删除文件
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;&lt;code&gt;复制及拷贝&lt;/code&gt; 操作&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;    cp -r /path/ /etc/path/                    # 复制文件夹
+    cp /etc/resolv.conf /etc/path/resolv.conf  # 复制文件
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;&lt;code&gt;筛选&lt;/code&gt; 操作&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;    ls | grep bash       # 筛选出文件名含bash的文件
+    lspci | grep nvidia  # 筛选出PCI设备中含nvidia字样的设备
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;&lt;code&gt;重命名&lt;/code&gt; 操作&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;    mv ./nano.md ./vim.md       # 将当前目录下名为nano的文件重命名为vim文件
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;&lt;code&gt;挂载&lt;/code&gt; 操作&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;    mount /path/ /mnt/path/     # 挂载目录至/mnt下
+    umount /mnt                 # 取消目录/mnt下的挂载
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;&lt;code&gt;查找&lt;/code&gt; 操作&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;    find resolv.conf             # 由当前目录开始依次查找
+    whereis resolv               # 全局查找文件名路径
+    which resolv                 # 全局查找应用路径
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;&lt;code&gt;变量植入&lt;/code&gt; 操作&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;    echo &quot;text&quot;                 # 打印双引号中的文本信息
+    echo &quot;text&quot; &amp;gt; resolv.conf   # 将双引号内的文本信息加入到本地目录下的resolv.conf文件中覆盖其他内容
+    echo &quot;text&quot; &amp;gt;&amp;gt; resolv.conf  # 将双引号内的文本信息加入到本地目录下的resolv.conf文件中但不覆盖其他内容
+    echo $SHELL                 # 打印变量SHELL的环境
+    echo $HOME                  # 打印变量HOME的环境
+&lt;/code&gt;&lt;/pre&gt;
+&lt;hr /&gt;
+&lt;h2&gt;系统运维&lt;/h2&gt;
+&lt;h3&gt;用户及系统操作&lt;/h3&gt;
+&lt;h3&gt;&lt;code&gt;与或非&lt;/code&gt; 管道符&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;    command | command    # 将左边的命令执行结果作为右边命令的输入，然后执行右边的命令
+    command || command   # 左边的命令执行为0，则执行右边的命令
+    command &amp;amp;&amp;amp; command   # 左边的命令执行为1，再执行右边的命令
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;&lt;code&gt;时区&lt;/code&gt; 设置&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;    ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime  # 切换时区至上海
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;用户操作&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;    useradd -m username      # 创建用户
+    userdel -r username      # 删除用户
+    passwd username          # 修改用户密码
+    su username              # 切换用户
+    sudo su                  # 进入超级用户
+    sudo -i                  # 选择设备本身
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;&lt;code&gt;用户对文件的权限&lt;/code&gt; 操作&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;    chmod +x ./file         # 赋予文件所有角色最高权限
+    chmod -x ./file         # 移除文件所有角色最高权限
+    chown user:user ./file  # 修改文件所有权为指定角色
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;&lt;code&gt;top&lt;/code&gt; 进程操作&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;    top
+      k:  number            # 斩杀指定PID的进程
+      kill  number          # 斩杀指定PID的进程
+      ps -ef                # 显示进程详情
+      ps aux                # 显示进程用量及其他信息
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;&lt;code&gt;网络设备&lt;/code&gt; 操作&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;    ifconfig                      # 显示物理网卡信息
+    ifconfig NIC down             # 停止指定物理网卡工作
+    ifconfig NIC up               # 使指定物理网卡开始工作
+    macchanger -m MAC_address NIC # 在 NIC 关闭时暂时修改 NIC 地址
+    iwconfig                      # 显示无线网卡信息
+    ping 223.5.5.5                # 帧听通信
+    traceroute 223.5.5.5          # 路由追踪
+    netstat -ano                  # 查看系统所有开放端口
+    netstat -nltp                 # 查看系统所有开放TCP端口
+    netstat -nlutp                # 查看系统所有开放TCP及UDP端口
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;使用 &lt;code&gt;pacman&lt;/code&gt; 作为包管理器&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;    pacman -Syy                 # 升级镜像源清单
+    pacman -Syu                 # 升级镜像源包
+    pacman -Ss                  # 从镜像源中搜索工具
+    pacman -S                   # 从镜像源中安装工具
+    pacman -R                   # 卸载工具
+    pacman -Rs                  # 卸载工具及依赖
+    pacman -Rs $(pacman -Qdtq)  # 执行自动清理
+    pacman -Scc                 # 清楚镜像源缓存
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;使用 &lt;code&gt;yay&lt;/code&gt; 作为包管理器&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;    yay -Syy              # 升级镜像源清单
+    yay -Syu              # 升级镜像源包
+    yay -Ss               # 从镜像源中搜索工具
+    yay -S                # 从镜像源中安装工具
+    yay -R                # 卸载工具
+    yay -Rs               # 卸载工具及依赖
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;使用 &lt;code&gt;yum&lt;/code&gt; 作为包管理器&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;    yum search              # 从镜像源中搜索工具
+    yum update              # 升级镜像源清单及工具
+    yum upgrade             # 升级镜像源及系统
+    yum install             # 从镜像源中安装工具
+    yum remove              # 卸载工具
+    yum autoremove          # 自动清理
+    yum check-update        # 确认升级包
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;使用 &lt;code&gt;apt&lt;/code&gt; 作为包管理器&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;    apt search              # 从镜像源中搜索工具
+    apt update              # 升级镜像源清单
+    apt upgrade             # 升级镜像源包
+    apt install             # 从镜像源中安装工具
+    apt remove              # 卸载工具
+    apt autoremove          # 自动清理
+    apt purge --remove      # 卸载工具及依赖
+    apt list --upgradable   # 升级工具清单
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;使用 &lt;code&gt;dpkg&lt;/code&gt; 作为工具管理&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;    dpkg -i ./install.deb           # 安装工具
+    dpkg -r ./install.deb           # 卸载工具
+    dpkg --print-architecture       # 打印当前工具环境
+    dpkg --add-architecture amd64   # 环境切换为amd64
+    dpkg --add-architecture i386    # 环境切换为i386
+    dpkg --add-architecture arm64   # 环境切换为arm64
+    dpkg --remove-architecture i915 # 删除i915环境
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;使用 &lt;code&gt;snap&lt;/code&gt; 作为工具管理&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;    snap serch              # 搜索工具
+    snap install            # 安装工具
+    snap remove             # 卸载工具
+    snap &amp;lt;program&amp;gt;          # 执行工具
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2&gt;驱动管理&lt;/h2&gt;
+&lt;h3&gt;组建及模块操作&lt;/h3&gt;
+&lt;h3&gt;查看 &lt;code&gt;物理设备&lt;/code&gt; 操作&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;    lspci ｜ grep Audio/VGA/3D
+    # Audio = 声卡
+    # VGA = 核心显卡
+    # 3D = 独立显卡
+    lspci -knn # 查看所有正在使用的驱动
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;常用驱动安装列表&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;    linux-headers-$(uname -r)       # 内核头文件安装
+    linux-source                    # 编译必备组建
+    build-essential                 # 编译必备组建
+    make                            # 编译工具
+    nvidia-kernel-dkms              # 英伟达开源驱动DKMS
+    pulseaudio                      # 声卡开源驱动
+    bluetooth                       # 蓝牙开源驱动
+    bluez                           # 蓝牙开源驱动进程
+    mesa-utils                      # 编译必备组建
+    mesa                            # 编译必备组建
+    lib32-mesa                      # 编译必备组建(32位)
+    vulkan-intel                    # 英特尔核显驱动
+    lib32-vulkan-intel              # 英特尔核显驱动(32位)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;&lt;code&gt;BASH&lt;/code&gt; 环境强制中文&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;    vim ~/.bashrc
+    export LANGUAGE=&quot;zh_CN:UTF-8&quot;
+    reboot
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;&lt;code&gt;网络&lt;/code&gt; 基础配置&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;    ip addr                     # 查看网卡名称
+    ifconfig wlan0 up/down      # 启用无线网卡
+    # 连接指定无线网络
+    wpa_supplicant -B -i wlan0 -c &amp;lt;(wpa_passphrase wifi-ssid wifi-password)
+    # 或者
+    ifconfig enp7s0 up/down     # 启用有线网卡
+    dhcpcd                      # 开启dhcp接收模式
+    # 查看连接状态
+    iw dev wlan0/enp7s0 link
+&lt;/code&gt;&lt;/pre&gt;
+&lt;hr /&gt;
+&lt;h2&gt;输入输出&lt;/h2&gt;
+&lt;h3&gt;输入法接口操作&lt;/h3&gt;
+&lt;h3&gt;&lt;code&gt;Fcitx&lt;/code&gt; 输入法操作&lt;/h3&gt;
+&lt;p&gt;安装清单&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;    fcitx               # 输入法主程序
+    fcitx-googlepinyin  # 谷歌拼音
+    fcitx-configtool    # 配置界面
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;基础环境添加输入法&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;    vim /etc/environment
+    GTK_IM_MODULE=fcitx
+    QT_IM_MODULE=fcitx
+    XMODIFIERS=@im=fcitx
+    SDL_IM_MODULE=fcitx
+    # 自动运行只在KDE/Gnome/Xfce/LXDE环境下生效
+    fcitx-autostart &amp;amp;&amp;gt; /dev/null
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;输入法主题设置&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;    ls -l /usr/share/fcitx/skin
+    # 查看目录下的主题，并编辑配置文件
+    vim /home/user/.config/fcitx/conf/fcitx-classic-ui.config
+    # 查找以下内容并调整实际主题切换
+    SkinType=dark
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;&lt;code&gt;Fcitx 5&lt;/code&gt; 输入法操作&lt;/h3&gt;
+&lt;p&gt;安装清单&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;    fcitx5-im               # 输入法主程序
+    fcitx5-chinese-addons   # 拼音字典
+    fcitx5-rime             # 配置界面
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;基础环境添加输入法&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;    vim /etc/environment
+    GTK_IM_MODULE=fcitx
+    QT_IM_MODULE=fcitx
+    XMODIFIERS=@im=fcitx
+    SDL_IM_MODULE=fcitx
+    # 自动运行只在KDE/Gnome/Xfce/LXDE环境下生效
+    cp /usr/share/applications/fcitx5.desktop ~/.config/autostart/
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;输入法主题设置&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;    fcitx5-material-color                       # 安装主题
+    ls ~/.local/share/fcitx5/themes             # 查看主题
+    vim ~/.config/fcitx5/conf/classicui.conf    # 修改主题配置文件
+    # 查找以下内容并调整实际主题切换
+    Theme=Material-Color-Pink
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;&lt;code&gt;ibus&lt;/code&gt; 输入法操作&lt;/h3&gt;
+&lt;p&gt;安装清单&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;    ibus          # 输入法主程序
+    ibus-pinyin   # 拼音字典
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;ibus在gnome环境下安装好即可使用&lt;/p&gt;
+&lt;h3&gt;&lt;code&gt;CentOS&lt;/code&gt; 汉化&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;    local -a                    # 列出语言清单
+    local-gen zh_CN.UTF-8       # 加入中文
+    # 将中文设为默认
+    vim /etc/profile
+    export LANG=&apos;zh_CN.UTF-8&apos;
+    # 中文cli环境
+    zhcon
+    zhcon --utf8
+&lt;/code&gt;&lt;/pre&gt;
+&lt;hr /&gt;
+&lt;h2&gt;工具管理&lt;/h2&gt;
+&lt;h3&gt;工具应用及操作&lt;/h3&gt;
+&lt;h3&gt;安装清单&lt;/h3&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;工具类型&lt;/th&gt;
+&lt;th&gt;工具名称&lt;/th&gt;
+&lt;th&gt;组件名称&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;版本工具&lt;/td&gt;
+&lt;td&gt;screenfetch&lt;/td&gt;
+&lt;td&gt;主程序&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;版本工具&lt;/td&gt;
+&lt;td&gt;neofetch&lt;/td&gt;
+&lt;td&gt;主程序&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;文件工具&lt;/td&gt;
+&lt;td&gt;thunar&lt;/td&gt;
+&lt;td&gt;主程序&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;文件工具&lt;/td&gt;
+&lt;td&gt;ranger&lt;/td&gt;
+&lt;td&gt;主程序&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;下载工具&lt;/td&gt;
+&lt;td&gt;qbittorrent&lt;/td&gt;
+&lt;td&gt;主程序&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;下载工具&lt;/td&gt;
+&lt;td&gt;pyIDM&lt;/td&gt;
+&lt;td&gt;主程序&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;绘图工具&lt;/td&gt;
+&lt;td&gt;gimp&lt;/td&gt;
+&lt;td&gt;主程序&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;绘图工具&lt;/td&gt;
+&lt;td&gt;gimp&lt;/td&gt;
+&lt;td&gt;gimp-help-en&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;绘图工具&lt;/td&gt;
+&lt;td&gt;scrot&lt;/td&gt;
+&lt;td&gt;主程序&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;浏览器工具&lt;/td&gt;
+&lt;td&gt;firefox&lt;/td&gt;
+&lt;td&gt;主程序&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;浏览器工具&lt;/td&gt;
+&lt;td&gt;firefox&lt;/td&gt;
+&lt;td&gt;firefox-l10n-zh-cn&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;浏览器工具&lt;/td&gt;
+&lt;td&gt;chromium&lt;/td&gt;
+&lt;td&gt;主程序&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;浏览器工具&lt;/td&gt;
+&lt;td&gt;chromium&lt;/td&gt;
+&lt;td&gt;chromium-l10n&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;浏览器工具&lt;/td&gt;
+&lt;td&gt;lynx&lt;/td&gt;
+&lt;td&gt;主程序&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;办公工具&lt;/td&gt;
+&lt;td&gt;wps-office&lt;/td&gt;
+&lt;td&gt;主程序&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;办公工具&lt;/td&gt;
+&lt;td&gt;wps-office&lt;/td&gt;
+&lt;td&gt;wps-office-mui-zh-cn&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;音乐工具&lt;/td&gt;
+&lt;td&gt;netease-cloud-music&lt;/td&gt;
+&lt;td&gt;主程序&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;音乐工具&lt;/td&gt;
+&lt;td&gt;mpd&lt;/td&gt;
+&lt;td&gt;主程序&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;音乐工具&lt;/td&gt;
+&lt;td&gt;ncmpcpp&lt;/td&gt;
+&lt;td&gt;主程序&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;社交工具&lt;/td&gt;
+&lt;td&gt;discord&lt;/td&gt;
+&lt;td&gt;主程序&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;社交工具&lt;/td&gt;
+&lt;td&gt;telegram-desktop&lt;/td&gt;
+&lt;td&gt;主程序&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;虚拟化工具&lt;/td&gt;
+&lt;td&gt;virtualbox&lt;/td&gt;
+&lt;td&gt;主程序&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;虚拟化工具&lt;/td&gt;
+&lt;td&gt;virtualbox&lt;/td&gt;
+&lt;td&gt;virtualbox-ext-oracle&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;编译工具&lt;/td&gt;
+&lt;td&gt;visual-stdio-code-bin&lt;/td&gt;
+&lt;td&gt;主程序&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;安卓工具&lt;/td&gt;
+&lt;td&gt;android-tools&lt;/td&gt;
+&lt;td&gt;主程序&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;时间工具&lt;/td&gt;
+&lt;td&gt;ntp&lt;/td&gt;
+&lt;td&gt;主程序&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;韵味工具&lt;/td&gt;
+&lt;td&gt;mtr&lt;/td&gt;
+&lt;td&gt;主程序&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;网络工具&lt;/td&gt;
+&lt;td&gt;whois&lt;/td&gt;
+&lt;td&gt;主程序&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;编译工具&lt;/td&gt;
+&lt;td&gt;gcc&lt;/td&gt;
+&lt;td&gt;主程序&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;仓库工具&lt;/td&gt;
+&lt;td&gt;git&lt;/td&gt;
+&lt;td&gt;主程序&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;下载工具&lt;/td&gt;
+&lt;td&gt;curl&lt;/td&gt;
+&lt;td&gt;主程序&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;下载工具&lt;/td&gt;
+&lt;td&gt;wget&lt;/td&gt;
+&lt;td&gt;主程序&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;词典工具&lt;/td&gt;
+&lt;td&gt;scrcpy&lt;/td&gt;
+&lt;td&gt;主程序&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;编译组件&lt;/td&gt;
+&lt;td&gt;libcaca&lt;/td&gt;
+&lt;td&gt;主程序&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;编译组件&lt;/td&gt;
+&lt;td&gt;highlight&lt;/td&gt;
+&lt;td&gt;主程序&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;编译组件&lt;/td&gt;
+&lt;td&gt;atool&lt;/td&gt;
+&lt;td&gt;主程序&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;编译组件&lt;/td&gt;
+&lt;td&gt;w3m&lt;/td&gt;
+&lt;td&gt;主程序&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;编译组件&lt;/td&gt;
+&lt;td&gt;elinks&lt;/td&gt;
+&lt;td&gt;主程序&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;编译组件&lt;/td&gt;
+&lt;td&gt;mediainfo&lt;/td&gt;
+&lt;td&gt;主程序&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3&gt;关键操作&lt;/h3&gt;
+&lt;p&gt;scrot&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;    scrot -s /mnt/machine/%wx%h.png  # 保存到制定目录
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;chromium&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;    chromium --no-sandbox # 超级用户身份运行
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;discord&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;    vim /opt/discord/discord.desktop
+    Exec = /usr/bin/discord --proxy-server=&quot;socks://127.0.0.1:8080&quot; # 配置代理运行
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;telegram-desktop&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;    &amp;lt;https://t.me/setlanguage/classic-zh-cn&amp;gt; # 中文语言包地址
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;scrcpy&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;    scrcpy -V                            # 查看工具版本
+    adb tcpip 2188                       # 打开tcp端口为2188
+    adb connect 192.168.1.2:2188         # 链接设备端口
+    scrcpy                               # 启用远程
+    adb disconnect 192.168.1.2:2188      # 断开设备远程
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;ranger初始配置&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;    ranger —copy-config=all           # 生成默认配置
+    # 修改默认配置
+    vim ~/.config/ranger/rc.conf
+    set preview_images true
+    set draw_borders true
+    set collapse_preview false
+    set preview_max_size 2048000
+    set one_indexed true
+    # 解禁root使用
+    ranger &amp;gt; gR &amp;gt; /core/main.py &amp;gt; :/username &amp;gt; root_disable
+    # ranger日常指令
+    yy = copy
+    dd = cut
+    pp = paste
+    po = Overlay
+    dD = delete
+    dU = folder size
+    cw = rename
+    space bar = tag file
+    delete bar = show hidden files
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;centos安装neofetch版本工具&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;    yum install epel-release # 安装工具源
+    curl -o /etc/yum.repos.d/konimex-neofetch-epel-7.repo &amp;lt;https://copr.fedorainfracloud.org/coprs/konimex/neofetch/repo/epel-7/konimex-neofetch-epel-7.repo&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;manjaro安装yakuake&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;    yay install yakuake # 安装工具源
+    # 启用开机自启动
+    cp /usr/share/applications/org.kde.yakuake.desktop ~/.config/autostart/
+&lt;/code&gt;&lt;/pre&gt;
+&lt;hr /&gt;
+&lt;h2&gt;显示设置&lt;/h2&gt;
+&lt;h3&gt;显示器接口操作&lt;/h3&gt;
+&lt;h3&gt;检查显示器接口状态&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;    xrandr  # 打印当前接入的物理显示器
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;关于扩展屏幕配置&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;    xrandr --output eDP1 --auto --primary   # 设置主屏幕
+    xrandr --output DP1 --auto              # 设置主副屏同步
+    xrandr --output DP1 --left-of eDP1      # DP1在eDP1左边
+    xrandr --output DP1 --right-of eDP1     # DP1在eDP1右边
+    xrandr --output DP1 --up-of eDP1        # DP1在eDP1上边
+    xrandr --output DP1 --down-of eDP1      # DP1在eDP1下边
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;关于旋转屏幕配置&lt;/h3&gt;
+&lt;p&gt;触摸屏驱动清单&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;    xf86-input-evdev
+    xf86-input-libinput
+    xf86-input-elographics
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;code&gt;方案1&lt;/code&gt; 梳理配置文件&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;    vim /etc/X11/xorg.conf
+    Section &quot;Monitor&quot;
+       Identifier          &quot;eDP1&quot;
+       Option              &quot;Rotate&quot; &quot;normal&quot;  # 选择 normal/right/left
+    EndSection
+
+    Section &quot;Screen&quot;
+       Identifier          &quot;Screen0&quot;
+       Monitor             &quot;eDP1&quot;
+       Option              &quot;RandRRotation&quot;
+    EndSection
+
+    Section &quot;ServerLayout&quot;
+       Identifier          &quot;DefaultLayout&quot;
+       Screen              &quot;Screen0&quot;
+    EndSection
+
+    Section &quot;InputClass&quot;                      # 触摸屏设置
+       Identifier          &quot;touchscreen&quot;
+       MatchIsTouchscreen  &quot;on&quot;
+       MatchDevicePath     &quot;/dev/input/event*&quot;
+       Driver              &quot;evdev&quot;
+       Option              &quot;SwapAxes&quot; &quot;true&quot;
+       Option              &quot;InvertX&quot; &quot;false&quot;
+       Option              &quot;InvertY&quot; &quot;true&quot;
+    EndSection
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;code&gt;方案2&lt;/code&gt; 命令操作旋转&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;    vim /usr/share/sddm/scripts/Xsetup        # 适用于sddm登录环境
+    xrandr --output screen --rotate left
+    xrandr --output screen --rotate right
+    xrandr --output screen --rotate inverted
+    xrandr --output screen --rotate normal
+&lt;/code&gt;&lt;/pre&gt;
+&lt;hr /&gt;
+&lt;h2&gt;登录环境&lt;/h2&gt;
+&lt;h3&gt;图形化访问操作&lt;/h3&gt;
+&lt;h3&gt;sddm允许超级用户访问图形化&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;    vim /etc/pam.d/sddm
+    # auth    required   pam_succeed_if.so user != root nopasswdlogin
+    auth    sufficient   pam_succeed_if.so user ingroup nopasswdlogin
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;sddm主题设置&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;    ls -la /usr/share/sddm/themes # 查看主题目录
+    # 编辑配置文件
+    vim /etc/sddm.conf
+    Current=themename
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;Fluxbox桌面环境&lt;/h3&gt;
+&lt;p&gt;创建命令接口&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;    [exec](terminals){urxvt -bg black -fg pink/red/green/white -geometry 80x60}
+    [exec](menu-address)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;命令工作窗口&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;    [submenu](box)
+        [exec](tool){urxvt -geometry 80x60 -e tool}
+    [end]
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;程序菜单&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;    [submenu](box)
+        [exec](program){program-address}
+        [exec](program(rename\\)){program-address}
+    [end]
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;壁纸切换&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;    [submenu] (Backgrounds)
+        [wallpapers] (~/.fluxbox/backgrounds) {feh --bg-scale}
+        [wallpapers] (/usr/share/fluxbox/backgrounds) {feh --bg-scale}
+    [end]
+&lt;/code&gt;&lt;/pre&gt;
+</content:encoded></item><item><title>Armbian部署</title><link>https://fuwari.vercel.app/posts/armbian%E9%83%A8%E7%BD%B2/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/armbian%E9%83%A8%E7%BD%B2/</guid><pubDate>Fri, 07 Apr 2023 00:00:00 GMT</pubDate><content:encoded>&lt;h1&gt;本文主要介绍Armian系统的安装和部署&lt;/h1&gt;
+&lt;hr /&gt;
+&lt;h3&gt;系统的安装没有图形化界面，安装过程高度定制化，可以根据您的喜好进行安排&lt;/h3&gt;
+&lt;p&gt;系统详细信息查看&lt;a href=&quot;https://github.com/ophub/amlogic-s9xxx-armbian&quot;&gt;https://github.com/ophub/amlogic-s9xxx-armbian&lt;/a&gt;&lt;/p&gt;
+&lt;hr /&gt;
+&lt;h3&gt;将系统使用 Etcher 写入U盘启动后执行：&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;armbian-install     # 安装脚本
+304                 # 根据硬件选择适合自己的内核
+1                   # 确认安装
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;重启设备拔掉U盘进入系统&lt;/h3&gt;
+&lt;p&gt;主机名及搜索域设置&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;# 设置主机名
+vim /etc/hostname
+# 设置搜索域
+vim /etc/hosts
+127.0.0.1   localhost
+127.0.1.1   xxx.localdomain	xxx
+::1         localhost xxx ip6-localhost ip6-loopback
+fe00::0     ip6-localnet
+ff00::0     ip6-mcastprefix
+ff02::1     ip6-allnodes
+ff02::2     ip6-allrouters
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;静态地址设置&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;vim /etc/network/interfaces
+address 192.168.1.14
+netmask 255.255.255.0
+gateway 192.168.1.1
+        hwaddress ether 8E:66:EB:AC:3D:EE
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;如果 &lt;code&gt;sudo&lt;/code&gt; 出现报错&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;pkexec chown root:root /etc/sudo.conf -R
+mandb -csp
+&lt;/code&gt;&lt;/pre&gt;
+</content:encoded></item><item><title>Archlinux部署</title><link>https://fuwari.vercel.app/posts/archlinux%E9%83%A8%E7%BD%B2/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/archlinux%E9%83%A8%E7%BD%B2/</guid><pubDate>Thu, 06 Apr 2023 00:00:00 GMT</pubDate><content:encoded>&lt;blockquote&gt;
+&lt;p&gt;本文主要介绍Archlinux系统的安装和部署&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;hr /&gt;
+&lt;h3&gt;制作基础系统引导U盘&lt;/h3&gt;
+&lt;h3&gt;&lt;code&gt;1&lt;/code&gt;.闪存U盘 ( 不低于4G可用空间 )&lt;/h3&gt;
+&lt;h3&gt;&lt;code&gt;2&lt;/code&gt;.下载IOS系统镜像文件 ( &lt;a href=&quot;https://archlinux.org/download/&quot;&gt;Download-Page&lt;/a&gt; )&lt;/h3&gt;
+&lt;h3&gt;&lt;code&gt;3&lt;/code&gt;.将系统文件刷写入U盘 ( &lt;a href=&quot;https://www.balena.io/etcher/&quot;&gt;balenaEtcher&lt;/a&gt; )&lt;/h3&gt;
+&lt;h3&gt;&lt;code&gt;4&lt;/code&gt;.物理机U盘引导基础系统&lt;/h3&gt;
+&lt;hr /&gt;
+&lt;h2&gt;物理机U盘启动&lt;/h2&gt;
+&lt;blockquote&gt;
+&lt;p&gt;注意:&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;ul&gt;
+&lt;li&gt;开始前请检查磁盘上有足够的可用空间&lt;/li&gt;
+&lt;li&gt;BIOS设置UEFI启动模式&lt;/li&gt;
+&lt;li&gt;启动烧录的驱动程序镜像，进入 &lt;code&gt;root&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;变更镜像源地址&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;echo &apos;Server = https://mirrors.ustc.edu.cn/archlinux/$repo/os/$arch&apos; &amp;gt; /etc/pacman.d/mirrorlist
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;确认系统的UEFI引导环境&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;ls /sys/firmware/efi/efivars
+# 检查反馈信息确认系统引导方式
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;检查已安装的网卡&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;lspci -k | grep Network
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;使用无线网卡连接网络&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;systemctl status iwd
+systemctl start iwd
+
+iwctl
+device list
+station wlan0 scan
+station wlan0 get-networks
+station wlan0 connect wifi-name
+exit
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;设置时间&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;timedatectl set-ntp true
+timedatectl status
+# 或者使用date命令手动修改日期时间
+date -s &quot;YYYY-MM-DD HH:MM:SS&quot;
+# YYYY-MM-DD 年月日
+# HH:MM:SS 时分秒
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;查看物理磁盘及运行内存状态&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;lsblk
+fdisk -l
+df -h
+free -h
+&lt;/code&gt;&lt;/pre&gt;
+&lt;blockquote&gt;
+&lt;p&gt;硬盘分区请在站内搜索相关文章：&lt;strong&gt;Linux LVM分区挂载&lt;/strong&gt; 或者 &lt;strong&gt;Linux物理分区挂载&lt;/strong&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h3&gt;安装及升级keyring&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;    pacman -S archlinux-keyring &amp;amp;&amp;amp; sudo pacman -Syy
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;系统部署&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;# 默认安装zen内核，普通内核可以将linux-zen更换为linux
+pacstrap /mnt base base-devel bash-completion linux-zen linux-zen-headers linux-firmware dhcpcd iwd vim nano sudo net-tools lvm2 grub efibootmgr curl wget git gzip unzip zip tar openssh neofetch iftop bashtop
+# 根据CPU架构选择对应的微码安装
+pacstrap /mnt intel-ucode/amd-ucode
+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;将分区UUID写入配置&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;genfstab -U /mnt &amp;gt; /mnt/etc/fstab
+cat /mnt/etc/fstab
+&lt;/code&gt;&lt;/pre&gt;
+&lt;hr /&gt;
+&lt;h2&gt;进入系统进行配置&lt;/h2&gt;
+&lt;h3&gt;执行命令&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;arch-chroot /mnt
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;配置主机名及hosts值&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;vim /etc/hostname
+vim /etc/hosts
+127.0.0.1   localhost
+::1         localhost
+127.0.1.1   xxx.localdomain	xxx
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;将时区写入硬件&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+hwclock --systohc
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;配置语言&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;pacman -S locales # 如果工具不存在则进行安装
+dpkg-reconfigure locales
+# 激活中文
+vim /etc/locale.gen
+en_US.UTF-8 UTF-8
+zh_CN.UTF-8 UTF-8
+# 将默认语言写入配置
+locale-gen
+echo &apos;LANG=en_US.UTF-8&apos;  &amp;gt; /etc/locale.conf
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;配置超级用户密码&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;passwd root
+&lt;/code&gt;&lt;/pre&gt;
+&lt;hr /&gt;
+&lt;h2&gt;UEFI引导部署&lt;/h2&gt;
+&lt;h3&gt;注意你的硬盘分区模式&lt;/h3&gt;
+&lt;p&gt;如果是 &lt;code&gt;LVM&lt;/code&gt; 分区模式需要激活相应的内核模组&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;lvm2 # 如果没有安装请手动安装
+vim /etc/mkinitcpio.conf
+HOOKS=(base **systemd** ... block **sd-lvm2** filesystems)
+mkinitcpio -p linux
+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;安装引导工具&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;pacman -S grub efibootmgr [os-prober]
+grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=ARCH
+# 修改引导日志级别
+vim /etc/default/grub
+=&quot;loglevel=5 nowatchdog&quot;
+# 生成引导配置文件
+grub-mkconfig -o /boot/grub/grub.cfg
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;安装完成后退出及物理机重启、拔掉引导U盘&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;exit
+umount -R /mnt
+reboot # 重启设备
+&lt;/code&gt;&lt;/pre&gt;
+&lt;hr /&gt;
+&lt;h2&gt;构建桌面环境&lt;/h2&gt;
+&lt;p&gt;检查网络状态，启用相关服务&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;systemctl enable --now dhcpcd
+systemctl start iwd
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;如果是无线不记得了，可以看&lt;a href=&quot;Archlinux%E9%83%A8%E7%BD%B2%2022db526f61fd80d08d12eb308e63bc35.md&quot;&gt;这里&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;启用开放的 32 位支持库和 Archlinux 中文社区仓库&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;vim /etc/pacman.conf
+[multilib]
+Inclu...
+[archlinuxcn]
+Server = &amp;lt;https://mirrors.tuna.tsinghua.edu.cn/archlinuxcn/$arch&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;同步更新keyring&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;pacman-key --init
+pacman-key --populate archlinux
+pacman -Syy &amp;amp;&amp;amp; pacman -Syu
+pacman -S archlinux-keyring archlinuxcn-keyring
+pacman -S yay
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;安装中文字体&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;pacman -S noto-fonts noto-fonts-cjk adobe-source-han-serif-cn-fonts wqy-zenhei noto-fonts-emoji noto-fonts-extra
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;配置默认编辑器&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;vim ~/.bash_profile
+export EDITOR=&apos;vim&apos;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;普通用户及按需配置权限（桌面环境默认不支持root）&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;useradd -m -G wheel -s /bin/bash alarm
+passwd alarm
+# 修改权限
+EDITOR=vim visudo
+%wheel ALL=(ALL: ALL) ALL
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;桌面图形化解决方案&lt;/h3&gt;
+&lt;blockquote&gt;
+&lt;p&gt;方案1 KDE Plasma 桌面环境部署&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;pre&gt;&lt;code&gt;pacman -S plasma-meta konsole dolphin yakuake
+pacman -S qt5-virtualkeyboard onboard kded-rotation-git
+systemctl enable sddm
+systemctl start sddm
+# 配置键盘
+vim /etc/sddm.conf.d/virtualkbd.conf
+[General]
+InputMethod=qtvirtualkeyboard
+# 重启系统生效
+reboot
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;环境详细设置&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;sudo systemctl disable iwd
+sudo systemctl stop iwd
+sudo systemctl enable --now NetworkManager
+# 安装字体
+sudo pacman -S ntfs-3g
+sudo pacman -S ark packagekit-qt5 packagekit appstream-qt appstream gwenview mpv
+sudo pacman -S fcitx5-im fcitx5-chinese-addons
+# 配置输入法
+sudo vim /etc/environment
+INPUT_METHOD=fcitx5
+GTK_IM_MODULE=fcitx5
+QT_IM_MODULE=fcitx5
+XMODIFIERS=\\@im=fcitx5
+SDL_IM_MODULE=fcitx
+# 安装yay包管理工具
+sudo pacman -S archlinuxcn-keyring
+sudo pacman -S yay
+# 为普通用户配置默认文本编辑器
+sudo vim ~/.bashrc
+export EDITOR=&apos;vim&apos;
+# 启用蓝牙设备
+sudo systemctl enable --now bluetooth
+&lt;/code&gt;&lt;/pre&gt;
+&lt;blockquote&gt;
+&lt;p&gt;方案2 Gnome桌面环境部署&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;pre&gt;&lt;code&gt;# 安装环境组件
+pacman -S networkmanager modemmanager bluez bluez-utils pulseaudio-bluetooth
+pacman -S git wget ntfs-3g usbutils
+systemctl enable NetworkManager bluetooth
+systemctl enable ModemManager
+# 安装字体
+pacman -S ibus ibus-pinyin mpv
+echo &apos;LANG=zh_CN.UTF-8&apos;  &amp;gt; /etc/locale.conf
+# 安装桌面及登陆器
+pacman -S gnome
+systemctl enable gdm
+# 重启系统生效
+reboot
+&lt;/code&gt;&lt;/pre&gt;
+</content:encoded></item><item><title>Gnome环境优化</title><link>https://fuwari.vercel.app/posts/gnome%E7%8E%AF%E5%A2%83%E4%BC%98%E5%8C%96/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/gnome%E7%8E%AF%E5%A2%83%E4%BC%98%E5%8C%96/</guid><pubDate>Tue, 04 Apr 2023 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;本文主要对Gnome桌面环境日常使用部分优化&lt;/h2&gt;
+&lt;h3&gt;关闭显示屏的触摸功能&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;    apt purge --remove iio-sensor-proxy -y
+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;hr /&gt;
+&lt;h3&gt;&lt;code&gt;Gdm&lt;/code&gt; 登录环境设置&lt;/h3&gt;
+&lt;p&gt;工具路径&lt;a href=&quot;https://github.com/realmazharhussain/gdm-tools&quot;&gt;https://github.com/realmazharhussain/gdm-tools&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;生成默认环境配置文件&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;cp ~/.config/monitors.xml /var/lib/gdm/.config/
+set-gdm-theme set -b /home/user/picture/youset.jpg # 设置登录背景
+set-gdm-theme -l                                   # 查看可用主题
+set-gdm-theme -s orchis                            # 设置登录主题
+&lt;/code&gt;&lt;/pre&gt;
+&lt;hr /&gt;
+&lt;h3&gt;Gnome &lt;code&gt;不常用&lt;/code&gt; 的工具&lt;/h3&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;工具名&lt;/th&gt;
+&lt;th&gt;作用&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;epiphany-browser&lt;/td&gt;
+&lt;td&gt;基础浏览器&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;gnome-user-docs&lt;/td&gt;
+&lt;td&gt;用户文档&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;yelp&lt;/td&gt;
+&lt;td&gt;帮助&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;totem&lt;/td&gt;
+&lt;td&gt;视频播放器&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;gnome-maps&lt;/td&gt;
+&lt;td&gt;地图&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;gnome-music&lt;/td&gt;
+&lt;td&gt;音乐&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;gnome-text-editor&lt;/td&gt;
+&lt;td&gt;文本编辑器&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;gnome-weather&lt;/td&gt;
+&lt;td&gt;天气&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;gnome-contacts&lt;/td&gt;
+&lt;td&gt;联系人&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;gnome-photos&lt;/td&gt;
+&lt;td&gt;照片&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;gnome-books&lt;/td&gt;
+&lt;td&gt;书籍&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;hr /&gt;
+&lt;h3&gt;Gnome &lt;code&gt;可选&lt;/code&gt; 的实用工具&lt;/h3&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;工具名&lt;/th&gt;
+&lt;th&gt;作用&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;gnome-tweaks&lt;/td&gt;
+&lt;td&gt;优化&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;gnome-shell-extensions&lt;/td&gt;
+&lt;td&gt;扩展&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;gnome-shell-extension-dash-to-dock&lt;/td&gt;
+&lt;td&gt;扩展包&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;juno-theme-git&lt;/td&gt;
+&lt;td&gt;系统主题&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;guake&lt;/td&gt;
+&lt;td&gt;终端&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;guake-toggle&lt;/td&gt;
+&lt;td&gt;终端插件&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;cmatrix&lt;/td&gt;
+&lt;td&gt;娱乐工具&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;gpu-viewer&lt;/td&gt;
+&lt;td&gt;显卡查看&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;cpu-x&lt;/td&gt;
+&lt;td&gt;核心查看&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;figlet&lt;/td&gt;
+&lt;td&gt;娱乐工具&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;Guake终端工具启用开机自启动&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;cp /usr/share/applications/guake.desktop ～/.config/autostart
+# 或者在图形化设置里进行操作
+GNOME Settings - &amp;gt; Keyboard -&amp;gt; Customize shortcuts
+&lt;/code&gt;&lt;/pre&gt;
+&lt;hr /&gt;
+&lt;h3&gt;Gnome &lt;code&gt;主题及工具&lt;/code&gt; 推荐&lt;/h3&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;工具名&lt;/th&gt;
+&lt;th&gt;作用&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&quot;https://github.com/vinceliuice/Orchis-theme&quot;&gt;Orchis&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;系统主题&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&quot;https://github.com/Jannomag/Yaru-Colors&quot;&gt;Yaru-Colors&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;系统主题&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&quot;https://github.com/EliverLara/Sweet&quot;&gt;Sweet&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;系统主题&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&quot;https://github.com/realmazharhussain/gdm-tools&quot;&gt;Gdm-tools&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;实用工具&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&quot;https://github.com/owenthereal/ccat&quot;&gt;Ccat&lt;/a&gt;&lt;/td&gt;
+&lt;td&gt;实用工具&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;hr /&gt;
+&lt;h3&gt;Gnome &lt;code&gt;黑屏死锁&lt;/code&gt; 解决&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;gnome-shell-extension-manager  # 安装工具
+caribou 36                     # 安装插件并启用
+&lt;/code&gt;&lt;/pre&gt;
+</content:encoded></item><item><title>离线K8s_1)安装工具</title><link>https://fuwari.vercel.app/posts/%E7%A6%BB%E7%BA%BFk8s_1%E5%AE%89%E8%A3%85%E5%B7%A5%E5%85%B7/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/%E7%A6%BB%E7%BA%BFk8s_1%E5%AE%89%E8%A3%85%E5%B7%A5%E5%85%B7/</guid><pubDate>Tue, 04 Apr 2023 00:00:00 GMT</pubDate><content:encoded>&lt;h3&gt;本文主要针对离线部署的相关工具进行构建汇总安装&lt;/h3&gt;
+&lt;hr /&gt;
+&lt;h3&gt;建议开始前先准备一台能够链接互联网的系统作为测试环境&lt;/h3&gt;
+&lt;h3&gt;&lt;code&gt;测试环境&lt;/code&gt; 对工具进行下载、构建&lt;/h3&gt;
+&lt;h3&gt;更新阿里云镜像源并安装kubeadm、kubelet、docker&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;# kubeadm、kubelet版本我们选择1.28版本，docker版本选择24.0.0版本
+yum makecache &amp;amp;&amp;amp; yum install -y kubeadm-1.28.0 kubelet-1.28.0 &amp;amp;&amp;amp; yum install -y docker-ce-24.0.0
+# 查找工具
+yum list installed | grep docker        # 查找docker组件
+yum list installed | grep kubernetes    # 查找k8s组件
+# 查找对应依赖
+yum deplist xxx                                         # 提前记录依赖包名
+yum install yum-plugin-downloadonly                     # 安装构建rpm包工具
+yum reinstall --downloadonly --downloaddir=/root xxx    # 将相关工具及依赖包下载至/root目录下
+# 下载cri-dockerd作为工具间配合协作
+cd /root &amp;amp;&amp;amp; wget &amp;lt;https://github.com/Mirantis/cri-dockerd/releases/download/v0.3.2/cri-dockerd-0.3.2-3.el7.x86_64.rpm&amp;gt;
+yum localinstall -y ./cri-dockerd-0.3.2-3.el7.x86_64.rpm  # 安装cri-dockerd工具
+# 编辑cri-dockerd服务配置
+vim /usr/lib/systemd/system/cri-docker.service
+ExecStart=/usr/bin/cri-dockerd --container-runtime-endpoint fd:// # 修改这段内容
+ExecStart=/usr/bin/cri-dockerd --container-runtime-endpoint fd:// --pod-infra-container-image=registry.aliyuncs.com/google_containers/pause:3.9 # 修改为这样
+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;检查工具的rpm包及依赖已经下载完成后，测试环境启动K8s与docker、cri-dockerd服务&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;systemctl enable docker &amp;amp;&amp;amp; systemctl enable cri-docker &amp;amp;&amp;amp; systemctl enable kubelet.service
+# 重启操作系统
+reboot
+# 重启后检查docker及cri-dockerd服务运行状态
+systemctl status docker     # 验证存活
+systemctl status cri-docker # 验证存活
+# kubelet服务目前暂未初始化，服务应该是处于down的状态，不需要检查
+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;hr /&gt;
+&lt;h3&gt;接下来，我们需要在测试环境初始化K8s所需的镜像&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;# 镜像初始化
+kubeadm config images pull --image-repository=registry.aliyuncs.com/google_containers --cri-socket
+# 初始化完成不会有反馈，需要以下命令检查初始化情况
+docker images
+# 创建镜像保存目录
+mkdir /root/kubernetes
+# 将下载的容器镜像保存到目录中，注意记录[IMAGE ID]编号，非常有用
+docker save [IMAGE ID] &amp;gt; /root/kubernetes/kube-apiserver.tar
+docker save [IMAGE ID] &amp;gt; /root/kubernetes/kube-scheduler.tar
+docker save [IMAGE ID] &amp;gt; /root/kubernetes/kube-controller-manager.tar
+docker save [IMAGE ID] &amp;gt; /root/kubernetes/kube-proxy.tar
+docker save [IMAGE ID] &amp;gt; /root/kubernetes/etcd.tar
+docker save [IMAGE ID] &amp;gt; /root/kubernetes/coredns.tar
+docker save [IMAGE ID] &amp;gt; /root/kubernetes/pause.tar
+# 之后可以在测试环境尝试搭建master节点，以部署flannel、calico网络插件容器、dashboard容器等
+# 用同样的方式导出容器镜像，在生产环境离线部署时会用到
+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;hr /&gt;
+&lt;h3&gt;&lt;code&gt;生产环境&lt;/code&gt; 离线部署Kubernetes&lt;/h3&gt;
+&lt;h3&gt;注意：离线部署也需要将基础环境进行调优&lt;/h3&gt;
+&lt;h3&gt;调优动作完成后，我们需要将测试环境下载在/root目录下的所有rpm包、下载在/root/kubernetes所有tar包上传至服务器进行本地化安装&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;# 假设上传位置与测试环境相同
+cd /root
+yum localinstall -y ./*         # 本地化安装kubeadm、kubelet、docker、cri-dockerd
+rpm -Uvh *.rpm --nodeps --force # 不考虑依赖的可以尝试这条命令安装
+# 同步修改cri-dockerd服务配置
+vim /usr/lib/systemd/system/cri-docker.service
+ExecStart=/usr/bin/cri-dockerd --container-runtime-endpoint fd:// # 将这段内容
+ExecStart=/usr/bin/cri-dockerd --container-runtime-endpoint fd:// --pod-infra-container-image=registry.aliyuncs.com/google_containers/pause:3.9 # 修改为这样
+# 启用服务
+systemctl enable docker &amp;amp;&amp;amp; systemctl enable cri-docker &amp;amp;&amp;amp; systemctl enable kubelet.service
+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;工具安装完成后我们需要离线导入容器镜像&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;cd /root/kubernetes
+docker load &amp;lt; ./kubernetes/kube-apiserver.tar
+docker load &amp;lt; ./kubernetes/kube-scheduler.tar
+docker load &amp;lt; ./kubernetes/kube-controller-manager.tar
+docker load &amp;lt; ./kubernetes/kube-proxy.tar
+docker load &amp;lt; ./kubernetes/etcd.tar
+docker load &amp;lt; ./kubernetes/coredns.tar
+docker load &amp;lt; ./kubernetes/pause.tar
+# 容器镜像导入完成后，docker是不清楚容器信息的，所以我们得重新编写tag
+docker tag [IMAGE ID] registry.aliyuncs.com/google_containers/kube-apiserver:v1.28.14
+docker tag [IMAGE ID] registry.aliyuncs.com/google_containers/kube-scheduler:v1.28.14
+docker tag [IMAGE ID] registry.aliyuncs.com/google_containers/kube-controller-manager:v1.28.14
+docker tag [IMAGE ID] registry.aliyuncs.com/google_containers/kube-proxy:v1.28.14
+docker tag [IMAGE ID] registry.aliyuncs.com/google_containers/etcd:3.5.9-0
+docker tag [IMAGE ID] registry.aliyuncs.com/google_containers/coredns:v1.10.1
+docker tag [IMAGE ID] registry.aliyuncs.com/google_containers/pause:3.9
+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;hr /&gt;
+&lt;h3&gt;进行到此没有出现报错，工具的安装与控制平面镜像的部署算是完成了&lt;/h3&gt;
+&lt;h3&gt;接下来，我们需要对集群的部署进行操作&lt;/h3&gt;
+</content:encoded></item><item><title>离线K8s_2)插件管理</title><link>https://fuwari.vercel.app/posts/%E7%A6%BB%E7%BA%BFk8s_2%E6%8F%92%E4%BB%B6%E7%AE%A1%E7%90%86/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/%E7%A6%BB%E7%BA%BFk8s_2%E6%8F%92%E4%BB%B6%E7%AE%A1%E7%90%86/</guid><pubDate>Tue, 04 Apr 2023 00:00:00 GMT</pubDate><content:encoded>&lt;h3&gt;本文主要针对控制平台各项必备插件进行部署管理&lt;/h3&gt;
+&lt;hr /&gt;
+&lt;h3&gt;如果之前部署操作存在错误，可以清空集群配置重新部署&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;# 在每个节点上清空所有配置
+kubeadm reset --cri-socket unix:///var/run/cri-dockerd.sock
+reboot # 重启节点
+&lt;/code&gt;&lt;/pre&gt;
+&lt;hr /&gt;
+&lt;h3&gt;如果之前的配置无误，那么咱们继续进行插件部署&lt;/h3&gt;
+&lt;h3&gt;首先需要去除Master节点的污点，以保证网络插件的部署&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;kubectl get no -o yaml | grep taint -A 5 # 查看污点信息，注意返回的key值如下：
+key: node.kubernetes.io/not-ready
+
+kubectl taint nodes --all  node.kubernetes.io/not-ready- # 注意-字符，去除后键入检查
+&lt;/code&gt;&lt;/pre&gt;
+&lt;hr /&gt;
+&lt;h3&gt;部署网络插件flannel&lt;/h3&gt;
+&lt;h3&gt;测试环境下载配置文件&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;wget &amp;lt;https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml&amp;gt;
+vim ./kube-flannel.yml
+# 修改配置信息
+  net-conf.json: |
+    {
+      &quot;Network&quot;: &quot;192.168.0.0/24&quot;,
+      &quot;EnableNFTables&quot;: false,
+      &quot;Backend&quot;: {
+        &quot;Type&quot;: &quot;vxlan&quot;
+      }
+# 将修改后的配置文件上传至服务器
+# 因为网络插件主要是给Pod使用，因此需要修改为pod-network-cidr相应的网段
+kubectl apply -f ./kube-flannel.yml # 应用配置，docker将会调用相应的镜像并创建容器生成Pod
+kubectl get pods -A -n kube-flannel # 可以查看生成的Pod运行情况，出现1/1 runing则代表成功
+# 启用ipvs，注意第一部分需要内核已成功开启ipvs
+kubectl -n kube-system edit cm kube-proxy # 进入编辑模式，加入ipvs
+    metricsBindAddress: &quot;&quot;
+    mode: &quot;ipvs&quot;
+    nodePortAddresses: null
+# 重启pod生效
+kubectl delete pods -l k8s-app=kube-proxy -n kube-system
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;部署网络插件calico&lt;/h3&gt;
+&lt;h3&gt;因为是容器部署，所以使用tigera/operator 1.30.4版本以及calico 3.26.1版本进行部署，同步测试环境下载配置文件&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;wget &amp;lt;https://raw.githubusercontent.com/projectcalico/calico/v3.26.1/manifests/tigera-operator.yaml&amp;gt;
+wget &amp;lt;https://raw.githubusercontent.com/projectcalico/calico/v3.26.1/manifests/custom-resources.yaml&amp;gt;
+mv tigera-operator.yaml kube-calico-tigera-operator.yaml &amp;amp;&amp;amp; mv custom-resources.yaml kube-calico-custom-resources.yaml
+vim ./kube-calico-custom-resources.yaml
+  calicoNetwork:
+    # Note: The ipPools section cannot be modified post-install.
+    ipPools:
+    - blockSize: 26
+      cidr: 192.168.0.0/24
+      encapsulation: VXLANCrossSubnet
+      natOutgoing: Enabled
+      nodeSelector: all()
+# 将没修改的文件与修改后的配置文件上传至服务器
+# 修改逻辑同样是pod-network-cidr相应的网段
+kubectl apply -f ./kube-calico-tigera-operator.yaml     # 生成模板Pod
+kubectl apply -f ./kube-calico-custom-resources.yaml    # 生成插件Pod
+kubectl get pods -A -n kube-flannel # 可以查看生成的Pod运行情况，出现1/1 runing则代表成功
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;部署前端管理插件kubernetes-dashboard&lt;/h3&gt;
+&lt;h3&gt;测试环境下载配置文件&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;wget &amp;lt;https://raw.githubusercontent.com/kubernetes/dashboard/v2.7.0/aio/deploy/recommended.yaml&amp;gt;
+# 修改部署节点
+kind: Deployment
+...
+    spec:
+      nodeName: master1                                 # 指定运行的node,必须为master任意节点
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+# 修改内容可以考虑为nodeSelector方法，为节点预先打好标签就行，更推荐这种方式
+# 将修改后的配置文件上传至服务器
+kubectl apply -f ./recommended.yaml                     # 生成插件Pod
+kubectl get pods -A -n kube-flannel # 可以查看生成的Pod运行情况，出现1/1 runing则代表成功
+watch -n 1 -c &quot;kubectl get all -n kubernetes-dashboard &amp;amp;&amp;amp; kubectl get node -o wide &amp;amp;&amp;amp; kubectl get pods -A -o wide&quot; # 查看部署情况
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;浏览器输入 https://[master1_ip]:[port] 即可访问前端管理页面&lt;/h3&gt;
+&lt;h3&gt;至此，必备插件搭建完毕，如后期还有组件如crictl、helm等工具再另写文章&lt;/h3&gt;
+&lt;h3&gt;以上便是本章节全部内容，感谢阅读&lt;/h3&gt;
+</content:encoded></item><item><title>离线K8s_3)环境调优</title><link>https://fuwari.vercel.app/posts/%E7%A6%BB%E7%BA%BFk8s_3%E7%8E%AF%E5%A2%83%E8%B0%83%E4%BC%98/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/%E7%A6%BB%E7%BA%BFk8s_3%E7%8E%AF%E5%A2%83%E8%B0%83%E4%BC%98/</guid><pubDate>Tue, 04 Apr 2023 00:00:00 GMT</pubDate><content:encoded>&lt;h3&gt;本文主要针对CentOS7环境部署K8s所需的前置操作进行汇总&lt;/h3&gt;
+&lt;hr /&gt;
+&lt;h3&gt;配置本地解析器&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;nano /etc/hosts     # 修改解析器配置文件
+10.0.0.1  m01       # 4C4G 计划分配Master节点
+10.0.0.2  w01       # 2C2G 工作节点1
+10.0.0.3  w02       # 2C2G 工作节点2
+10.0.0.4  w03       # 2C2G 工作节点3
+nano /etc/hostname  # 修改主机名
+m01                 # 定义Master节点
+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;hr /&gt;
+&lt;h3&gt;关闭Master节点交换分区与SELinux工具&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;swapoff -a  &amp;amp;&amp;amp; sed -i &apos;s/.*swap.*/#&amp;amp;/g&apos; /etc/fstab                                      # 永久关闭节点交换分区
+setenforce 0 &amp;amp;&amp;amp; sed -i &apos;s/SELINUX=enforcing/SELINUX=disabled/g&apos; /etc/selinux/config     # 永久关闭SELinux
+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;调整Master节点防火墙策略&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;firewall-cmd --zone=public --add-port=2379/tcp --permanent                  # Etcd使用端口
+firewall-cmd --zone=public --add-port=2380/tcp --permanent                  # Etcd使用端口
+firewall-cmd --zone=public --add-port=4789/udp --permanent                  # Vxlan使用端口
+firewall-cmd --zone=public --add-port=5473/tcp --permanent                  # Cni使用端口
+firewall-cmd --zone=public --add-port=6443/tcp --permanent                  # Apiserver使用端口
+firewall-cmd --zone=public --add-port=6445/tcp --permanent                  # 自定义端口
+firewall-cmd --zone=public --add-port=6666/tcp --permanent                  # 自定义端口
+firewall-cmd --zone=public --add-port=9099/tcp --permanent                  # Calico网络插件使用端口
+firewall-cmd --zone=public --add-port=179/tcp --permanent                   # Bgp使用端口
+firewall-cmd --zone=public --add-port=30000-32767/tcp --permanent           # Node使用端口
+firewall-cmd --zone=public --add-port=10250-10258/tcp --permanent           # Master使用端口
+firewall-cmd --zone=public --add-port=53/tcp --permanent                    # Dns使用端口
+firewall-cmd --zone=public --add-port=53/udp --permanent                    # Dns使用端口
+firewall-cmd --zone=public --add-port=8443/tcp --permanent                  # Metrics-server使用端口
+firewall-cmd --zone=public --add-port=5000/tcp --permanent                  # Local-registry使用端口
+firewall-cmd --zone=public --add-port=5080/tcp --permanent                  # Local-apt使用端口
+firewall-cmd --zone=public --add-port=111/tcp --permanent                   # Rpcbind使用端口
+# 更新防火墙策略
+systemctl restart firewalld &amp;amp;&amp;amp; firewall-cmd --zone=public --list-ports
+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;hr /&gt;
+&lt;h3&gt;创建前置内核模组ipvs&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;cat &amp;gt; /etc/sysconfig/modules/ipvs.modules &amp;lt;&amp;lt; EOF
+#!/bin/bash
+modprobe -- ip_vs
+modprobe -- ip_vs_rr
+modprobe -- ip_vs_wrr
+modprobe -- ip_vs_sh
+modprobe -- nf_conntrack_ipv4
+EOF
+# 授权生效
+chmod 755 /etc/sysconfig/modules/ipvs.modules &amp;amp;&amp;amp; bash /etc/sysconfig/modules/ipvs.modules &amp;amp;&amp;amp; lsmod | grep -e ip_vs -e nf_conntrack_ipv4
+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;hr /&gt;
+&lt;h3&gt;确保内核已经加载了相应模块&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;# 如果 lsmod | grep ip_vs 并未出现 ip_vs_rr 等模块则成功
+cat &amp;gt; /etc/sysconfig/modules/ipvs.modules &amp;lt;&amp;lt; EOF
+#!/bin/bash
+ipvs_modules=&quot;ip_vs ip_vs_lc ip_vs_wlc ip_vs_rr ip_vs_wrr ip_vs_lblc ip_vs_lblcr ip_vs_dh ip_vs_sh ip_vs_fo ip_vs_nq ip_vs_sed ip_vs_ftp nf_conntrack_ipv4&quot;
+for kernel_module in \\${ipvs_modules}; do
+    /sbin/modinfo -F filename \\${kernel_module} &amp;gt; /dev/null 2&amp;gt;&amp;amp;1
+    if [ $? -eq 0 ]; then
+        /sbin/modprobe \\${kernel_module}
+    fi
+done
+EOF
+# 授权生效
+chmod 755 /etc/sysconfig/modules/ipvs.modules &amp;amp;&amp;amp; bash /etc/sysconfig/modules/ipvs.modules &amp;amp;&amp;amp; lsmod | grep ip_vs
+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;hr /&gt;
+&lt;h3&gt;增加桥接配置文件&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;cat &amp;gt; /etc/sysctl.d/k8s.conf &amp;lt;&amp;lt; EOF
+net.bridge.bridge-nf-call-ip6tables = 1
+net.bridge.bridge-nf-call-iptables = 1
+EOF
+# 关闭非必要服务组件
+systemctl stop postfix &amp;amp;&amp;amp; systemctl disable postfix
+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;hr /&gt;
+&lt;h3&gt;同步时间服务器及更换国内镜像源&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;# 同步时间服务器
+yum install -y ntpdate &amp;amp;&amp;amp; ntpdate ntp2.aliyun.com
+
+# 设置阿里云K8s镜像源
+cat &amp;gt; /etc/yum.repos.d/kubernetes.repo &amp;lt;&amp;lt; EOF
+[kubernetes]
+name=Kubernetes
+baseurl=https://mirrors.aliyun.com/kubernetes/yum/repos/kubernetes-el7-x86_64/
+enabled=1
+gpgcheck=0
+repo_gpgcheck=1
+gpgkey=https://mirrors.aliyun.com/kubernetes/yum/doc/yum-key.gpg
+&amp;lt;https://mirrors.aliyun.com/kubernetes/yum/doc/rpm-package-key.gpg&amp;gt;
+EOF
+
+# 设置阿里云Docker镜像源
+cat &amp;gt; /etc/yum.repos.d/docker-ce.repo &amp;lt;&amp;lt; EOF
+[docker-ce-stable]
+name=Docker CE Stable - $basearch
+baseurl=https://mirrors.aliyun.com/docker-ce/linux/centos/$releasever/$basearch/stable
+enabled=1
+gpgcheck=1
+gpgkey=https://mirrors.aliyun.com/docker-ce/linux/centos/gpg
+
+[docker-ce-stable-debuginfo]
+name=Docker CE Stable - Debuginfo $basearch
+baseurl=https://mirrors.aliyun.com/docker-ce/linux/centos/$releasever/debug-$basearch/stable
+enabled=0
+gpgcheck=1
+gpgkey=https://mirrors.aliyun.com/docker-ce/linux/centos/gpg
+
+[docker-ce-stable-source]
+name=Docker CE Stable - Sources
+baseurl=https://mirrors.aliyun.com/docker-ce/linux/centos/$releasever/source/stable
+enabled=0
+gpgcheck=1
+gpgkey=https://mirrors.aliyun.com/docker-ce/linux/centos/gpg
+
+[docker-ce-test]
+name=Docker CE Test - $basearch
+baseurl=https://mirrors.aliyun.com/docker-ce/linux/centos/$releasever/$basearch/test
+enabled=0
+gpgcheck=1
+gpgkey=https://mirrors.aliyun.com/docker-ce/linux/centos/gpg
+
+[docker-ce-test-debuginfo]
+name=Docker CE Test - Debuginfo $basearch
+baseurl=https://mirrors.aliyun.com/docker-ce/linux/centos/$releasever/debug-$basearch/test
+enabled=0
+gpgcheck=1
+gpgkey=https://mirrors.aliyun.com/docker-ce/linux/centos/gpg
+
+[docker-ce-test-source]
+name=Docker CE Test - Sources
+baseurl=https://mirrors.aliyun.com/docker-ce/linux/centos/$releasever/source/test
+enabled=0
+gpgcheck=1
+gpgkey=https://mirrors.aliyun.com/docker-ce/linux/centos/gpg
+
+[docker-ce-nightly]
+name=Docker CE Nightly - $basearch
+baseurl=https://mirrors.aliyun.com/docker-ce/linux/centos/$releasever/$basearch/nightly
+enabled=0
+gpgcheck=1
+gpgkey=https://mirrors.aliyun.com/docker-ce/linux/centos/gpg
+
+[docker-ce-nightly-debuginfo]
+name=Docker CE Nightly - Debuginfo $basearch
+baseurl=https://mirrors.aliyun.com/docker-ce/linux/centos/$releasever/debug-$basearch/nightly
+enabled=0
+gpgcheck=1
+gpgkey=https://mirrors.aliyun.com/docker-ce/linux/centos/gpg
+
+[docker-ce-nightly-source]
+name=Docker CE Nightly - Sources
+baseurl=https://mirrors.aliyun.com/docker-ce/linux/centos/$releasever/source/nightly
+enabled=0
+gpgcheck=1
+gpgkey=https://mirrors.aliyun.com/docker-ce/linux/centos/gpg
+EOF
+
+# 设置Master节点的阿里云系统镜像源
+wget -O /etc/yum.repos.d/CentOS-Base.repo &amp;lt;http://mirrors.aliyun.com/repo/Centos-7.repo&amp;gt;
+
+# 刷新List
+yum makecache &amp;amp;&amp;amp; yum update -y
+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;hr /&gt;
+&lt;h3&gt;注意：如果是完全离线的状态，镜像源改不改无所谓&lt;/h3&gt;
+&lt;h3&gt;以上便是本章节全部内容&lt;/h3&gt;
+</content:encoded></item><item><title>离线K8s_4)集群部署</title><link>https://fuwari.vercel.app/posts/%E7%A6%BB%E7%BA%BFk8s_4%E9%9B%86%E7%BE%A4%E9%83%A8%E7%BD%B2/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/%E7%A6%BB%E7%BA%BFk8s_4%E9%9B%86%E7%BE%A4%E9%83%A8%E7%BD%B2/</guid><pubDate>Tue, 04 Apr 2023 00:00:00 GMT</pubDate><content:encoded>&lt;h3&gt;本文主要针对集群部署进行解析&lt;/h3&gt;
+&lt;hr /&gt;
+&lt;h3&gt;集群的部署大致来看分为两种：&lt;/h3&gt;
+&lt;h3&gt;①单Master核心节点+多Workers工作节点&lt;/h3&gt;
+&lt;h3&gt;②多MasterHA核心节点+多Workers工作节点&lt;/h3&gt;
+&lt;h3&gt;如果仅仅普通业务，用①方案就可以了，但如果是比较复杂的业务需要复杂节点体系则需要②方案&lt;/h3&gt;
+&lt;h3&gt;根据您的业务体量进行选择，本章节偏向与以②方案进行讲解，有人能让您理解得更加全面，假设节点情况如下：&lt;/h3&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Master节点&lt;/th&gt;
+&lt;th&gt;10.0.0.4&lt;/th&gt;
+&lt;th&gt;虚拟IP&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;Master1&lt;/td&gt;
+&lt;td&gt;10.0.0.1&lt;/td&gt;
+&lt;td&gt;物理IP&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Master2&lt;/td&gt;
+&lt;td&gt;10.0.0.2&lt;/td&gt;
+&lt;td&gt;物理IP&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Master3&lt;/td&gt;
+&lt;td&gt;10.0.0.3&lt;/td&gt;
+&lt;td&gt;物理IP&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Worker1&lt;/td&gt;
+&lt;td&gt;10.0.0.5&lt;/td&gt;
+&lt;td&gt;物理IP&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Worker2&lt;/td&gt;
+&lt;td&gt;10.0.0.6&lt;/td&gt;
+&lt;td&gt;物理IP&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Worker3&lt;/td&gt;
+&lt;td&gt;10.0.0.7&lt;/td&gt;
+&lt;td&gt;物理IP&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3&gt;多MasterHA核心节点+多Workers工作节点方案需要在部署前起HA高可用，此时不管Master1/2/3哪一台或二台设备出现宕机，kubectl依旧能保持正常工作，如果三台设备同时宕机，相应的Master节点才会完全下线&lt;/h3&gt;
+&lt;hr /&gt;
+&lt;h3&gt;高可用的部署同样也是有几种方案，比如：KubeHA、HAProxy+Keepalived等&lt;/h3&gt;
+&lt;h3&gt;这部分主要以HAProxy+Keepalived这种比较传统的方式进行讲解&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;# 首先，请在测试环境构建这几个工具的rpm包
+yum reinstall --downloadonly --downloaddir=/root keepalived haproxy psmisc ipset ipvsadm
+# 其次，将构建的rpm包上传至服务器进行本地化部署
+rpm -ivh ./*.rpm
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;修改haproxy.cfg配置文件&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;# 配置文件每个Master节点主机都必须一致
+cat &amp;gt; /etc/haproxy/haproxy.cfg &amp;lt;&amp;lt; EOF
+global
+
+    log         127.0.0.1 local2
+
+    chroot      /var/lib/haproxy
+    pidfile     /var/run/haproxy.pid
+    maxconn     4000
+    user        haproxy
+    group       haproxy
+    daemon
+
+    stats socket /var/lib/haproxy/stats
+
+defaults
+  log global
+  option  httplog
+  option  dontlognull
+        timeout connect 5000
+        timeout client 50000
+        timeout server 50000
+
+frontend kube-apiserver
+    bind *:6445
+    mode tcp
+    option tcplog
+    default_backend kube-apiserver
+
+backend kube-apiserver
+    mode tcp
+    option tcplog
+    option tcp-check
+    balance roundrobin
+    default-server inter 10s downinter 5s rise 2 fall 2 slowstart 60s maxconn 250 maxqueue 256 weight 100
+    server master1 10.0.0.1:6443 check                 # 修改为Master节点1的主机名及IP地址
+    server master2 10.0.0.2:6443 check                 # 修改为Master节点2的主机名及IP地址
+    server master3 10.0.0.3:6443 check                 # 修改为Master节点2的主机名及IP地址
+EOF
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;修改keepalived.conf配置文件并授权生效&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;# 配置文件每个Master节点根据自身实际情况对注释部分进行调整修改
+cat &amp;gt; /etc/keepalived/keepalived.conf &amp;lt;&amp;lt; EOF
+global_defs {
+  notification_email {
+  }
+  router_id LVS_DEVEL
+  vrrp_skip_check_adv_addr
+  vrrp_garp_interval 0
+  vrrp_gna_interval 0
+}
+
+vrrp_script chk_haproxy {
+  script &quot;killall -0 haproxy&quot;
+  interval 2
+  weight 2
+}
+
+vrrp_instance haproxy-vip {
+  state MASTER              # 此处Master节点1使用，Master节点2/3使用BACKUP
+  priority 100              # 此处Master节点1使用，Master节点2/3使用99/98
+  interface ens192          # 网卡修改为节点实际的网卡
+  virtual_router_id 60
+  advert_int 1
+  authentication {
+    auth_type PASS
+    auth_pass 1111
+  }
+  unicast_src_ip 10.0.0.1   # 此处Master节点1使用的物理地址
+  unicast_peer {
+    10.0.0.2                # 此处为同级节点Master节点2的物理地址
+    10.0.0.3                # 此处为同级节点Master节点3的物理地址
+  }
+
+  virtual_ipaddress {
+    10.0.0.4/24             # 设置虚拟IP地址
+  }
+
+  track_script {
+    chk_haproxy
+  }
+}
+EOF
+# 授权每个Master节点服务开机自启动
+systemctl restart haproxy &amp;amp;&amp;amp; systemctl enable haproxy
+systemctl restart keepalived &amp;amp;&amp;amp; systemctl enable keepalived
+reboot
+# 每个Master节点重启后可以进行保活测试，虚拟IP出现漂移则配置生效
+systemctl stop haproxy
+&lt;/code&gt;&lt;/pre&gt;
+&lt;hr /&gt;
+&lt;h3&gt;高可用已经启用后部署Master主节点（如果是单Master环境的可以跳过上面那步）&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;# 进入 Master1 节点，并通过
+ip addr # 确认当前虚拟IP为当前节点上
+# 主节点部署
+kubeadm init \\
+    --apiserver-advertise-address=10.0.0.4 \\
+    --image-repository=registry.aliyuncs.com/google_containers \\
+    --kubernetes-version=v1.28.14 \\
+    --pod-network-cidr=192.168.0.0/24 \\
+    --service-cidr=172.31.0.0/24 \\
+    --cri-socket unix:///var/run/cri-dockerd.sock \\
+    --ignore-preflight-errors=all \\
+    --v=5
+
+# 如果部署过程报错，请检查/etc/hosts文件是否进行正确解析
+# 部署完成需要在节点上正确调用配置信息才能使用kubectl进行查看，请依次执行：
+mkdir -p $HOME/.kube
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+cp /etc/kubernetes/admin.conf ~/.kube/config # 核心节点
+# 查看集群环境是否已指定Vip
+kubectl -n kube-system get cm kubeadm-config -o yaml | grep -C 3 controlPlaneEndpoint
+# 无打印反馈信息则需要追加部署虚拟IP
+kubectl -n kube-system edit cm kubeadm-config
+    apiVersion: kubeadm.k8s.io/v1beta3
+    certificatesDir: /etc/kubernetes/pki
+    clusterName: kubernetes
+    controlPlaneEndpoint: 10.0.0.4:6443 # 设置为高可用的虚拟IP
+    controllerManager: {}
+    dns: {}
+    etcd:
+# 追加配置完成后建议优先部署flannel或者calico网络插件，本章节不涉及网络插件部署
+# 配置etcd集群
+nano /etc/kubernetes/manifests/etcd.yaml
+- --initial-cluster=master1=https://10.0.0.1:2380,master2=https://10.0.0.2:2380,master3=https://10.0.0.3:2380,master=https://10.0.0.4:2380
+cat /etc/kubernetes/manifests/etcd.yaml | grep initial-cluster # 验证修改
+# 部署etcdctl工具检查etcd集群状态
+cd root
+# 工具下载可以在测试环境进行，下载好了再上传至服务器
+wget &amp;lt;https://github.com/etcd-io/etcd/releases/download/v3.5.16/etcd-v3.5.16-linux-amd64.tar.gz&amp;gt;
+tar –xvf etcd-v3.5.16-linux-amd64.tar.gz
+cp etcd-v3.5.16-linux-amd64/etcd* /usr/local/bin
+# 查看集群配置
+etcdctl --cert /etc/kubernetes/pki/etcd/peer.crt \\
+    --key /etc/kubernetes/pki/etcd/peer.key \\
+    --cacert /etc/kubernetes/pki/etcd/ca.crt member list
+# 验证集群配置
+etcdctl -w table --cert /etc/kubernetes/pki/etcd/peer.crt --key /etc/kubernetes/pki/etcd/peer.key --cacert /etc/kubernetes/pki/etcd/ca.crt \\
+    --endpoints=https://10.0.0.4:2379,&amp;lt;https://10.0.0.2:2379&amp;gt;,&amp;lt;https://10.0.0.3:2379&amp;gt; endpoint status --cluster
+
+# 重新生成集群token
+kubeadm token create --print-join-command
+# 生成控制平台key
+kubeadm init phase upload-certs --upload-certs
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;节点Master2和Master3同步加入集群&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;# 加入集群
+kubeadm join 10.0.0.1:6443 --token 7dlwe3.xxx \\
+        --discovery-token-ca-cert-hash sha256:xxx \\
+        --control-plane --certificate-key xxx \\
+        --cri-socket unix:///var/run/cri-dockerd.sock \\
+        --ignore-preflight-errors=all \\
+        --v=5
+
+# 加入完成还需依次执行：
+mkdir -p $HOME/.kube
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+cp /etc/kubernetes/admin.conf ~/.kube/config
+# 修改etcd配置
+nano /etc/kubernetes/manifests/etcd.yaml
+- --initial-cluster=master1=https://10.0.0.1:2380,master2=https://10.0.0.2:2380,master3=https://10.0.0.3:2380,master=https://10.0.0.4:2380
+&lt;/code&gt;&lt;/pre&gt;
+&lt;hr /&gt;
+&lt;h3&gt;工作节点加入集群&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;# 加入集群
+kubeadm join 10.0.0.1:6443 --token 7dlwe3.xxx \\
+        --discovery-token-ca-cert-hash sha256:xxx \\
+        --cri-socket unix:///var/run/cri-dockerd.sock \\
+        --ignore-preflight-errors=all \\
+        --v=5
+
+# 加入完成还需依次执行：
+mkdir -p $HOME/.kube
+sudo cp -i /etc/kubernetes/kubelet.conf  $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+cp /etc/kubernetes/kubelet.conf ~/.kube/config
+&lt;/code&gt;&lt;/pre&gt;
+&lt;hr /&gt;
+&lt;h3&gt;以上便是本章节全部内容&lt;/h3&gt;
+</content:encoded></item><item><title>Linux通用网络配置</title><link>https://fuwari.vercel.app/posts/linux%E9%80%9A%E7%94%A8%E7%BD%91%E7%BB%9C%E9%85%8D%E7%BD%AE/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/linux%E9%80%9A%E7%94%A8%E7%BD%91%E7%BB%9C%E9%85%8D%E7%BD%AE/</guid><pubDate>Fri, 17 Jun 2022 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;本篇主要针对ifup-down、networkmanager、netplan网络工具进行配置&lt;/h2&gt;
+&lt;h3&gt;这3种网络管理守护进程是Linux系统下常用的进程间互斥同步&lt;/h3&gt;
+&lt;p&gt;所以在系统管理网络链路的过程中遇到问题
+必须优先检查是否存在进程冲突&lt;/p&gt;
+&lt;h2&gt;就每个工具的相关网络配置进行解析&lt;/h2&gt;
+&lt;h3&gt;systemd-networkd&lt;/h3&gt;
+&lt;p&gt;一般的systemd-networkd与systemd-resolved两个进程必须同时存在，对网络管理才会生效，常见于Archlinux与其他linux发行版标准配置中,具体可了解&lt;a href=&quot;https://wiki.archlinuxcn.org/wiki/Systemd-networkd&quot;&gt;Wiki&lt;/a&gt; ，上干货&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;# 进入配置文件目录
+cd /etc/systemd/network
+# 应该会有个名为 `xx.network` 文件
+ls -l
+sudo vim xx.network
+# 配置DHCP方法
+   [Match]
+   Name=eth0
+   [Network]
+   DHCP=ipv4
+# 配置STATIC方法
+    [Match]
+   Name=eth0
+   [Network]
+   Address=192.168.1.2/24
+   Gateway=192.168.1.1
+   DNS=8.8.8.8
+   DNS=8.8.4.4
+# 其中 `eth0` 为网卡设备，配置静态地址时可同时指定网关及域名解析服务器地址
+# 以下命令生效及查看运行情况
+systemctl restart systemd-networkd
+systemctl status systemd-networkd
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;重启服务的命令我就不写了，毕竟这工具有许多版本大同小异，不如重启系统来的快，另外在配置静态地址时，需要有一定的网络管理基础储备，最起码要了解局域网、网关、子网掩码间的关系&lt;/p&gt;
+&lt;h3&gt;netplan&lt;/h3&gt;
+&lt;p&gt;一般的netplan最常见工作于ubuntu服务器发行版中，详细可见&lt;a href=&quot;https://netplan.io/&quot;&gt;简介&lt;/a&gt;
+进程作用于内核网管之上，下面是干货&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;cd /etc/netplan
+# 编辑配置文件(文件名根据实际情况做修改)
+sudo vim xxx.yaml
+# 配置DHCP方法
+network:
+      version: 2
+          ethernets:
+              eth0:
+                  dhcp4: yes
+# 配置静态地址方法（含DNS）
+  network:
+      version: 2
+          ethernets:
+              eth0:
+                  dhcp4: no
+                      addresses: [192.168.1.2/24]
+                      gateway4: 192.168.1.1
+                  nameservers:
+                      addresses: [223.5.5.5, 8.8.4.4]
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;加载配置信息并生效&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;sudo netplan apply
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;networkmanager&lt;/h3&gt;
+&lt;p&gt;一般的networkmanager可以配置无线或者有线网络，更偏向于有线网络，常见于多种linux发行版与图形化界面的网络管理
+具体可了解&lt;a href=&quot;https://wiki.archlinuxcn.org/wiki/NetworkManager&quot;&gt;Wiki&lt;/a&gt;，上干货&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;# 进入配置文件目录
+cd /etc/network
+# 输入命令查看设备网卡信息(如未出现请检查驱动或IO设备是否挂载)
+ip a
+ifconfig
+# 编辑配置文件
+sudo vim interfaces
+# 配置动态地址(静态则取消注释，并将dhcp个更换为static)
+auto eth0
+   iface eth0 inet dhcp   #static
+        #address 192.168.1.2/24
+        #gateway 192.168.1.1
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;建议在配置静态地址时，同步配置DNS服务器地址&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;sudo vim /etc/resolv.conf
+# 配置以下为依据实际情况自定义内容
+nameserver 223.5.5.5
+nameserver 8.8.4.4
+# 重启系统或重启服务生效
+reboot
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;以上便是本篇全部内容&lt;/h3&gt;
+&lt;p&gt;感谢阅读&lt;/p&gt;
+</content:encoded></item><item><title>PVE节点local扩容</title><link>https://fuwari.vercel.app/posts/pve%E8%8A%82%E7%82%B9local%E6%89%A9%E5%AE%B9/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/pve%E8%8A%82%E7%82%B9local%E6%89%A9%E5%AE%B9/</guid><pubDate>Sat, 26 Jun 2021 00:00:00 GMT</pubDate><content:encoded>&lt;ul&gt;
+&lt;li&gt;在组建集群根服务器时，节点常常使用独立的存储空间，与其他虚拟机或容器相对独立；
+那么在初始化时整合节点空间，需要在web仪表台与后端命令行界面同步操作&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;以下为操作步骤&lt;/h2&gt;
+&lt;h3&gt;仪表台部分&lt;/h3&gt;
+&lt;p&gt;进入 &lt;code&gt;节点&lt;/code&gt; -&amp;gt; &lt;code&gt;存储&lt;/code&gt; -&amp;gt; 找到 &lt;code&gt;local-lvm&lt;/code&gt; -&amp;gt; &lt;code&gt;移除&lt;/code&gt;&lt;/p&gt;
+&lt;p&gt;此时已分配的空间仅仅在表项中移除，物理空间并未整合&lt;/p&gt;
+&lt;h3&gt;切换到命令行界面&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;ls -l /dev/pve/data # 查找指定目录是否存在
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;找到则进行下一步&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;lvremove /dev/pve/data # 移除物理空间
+lvresize -l +100%FREE /dev/pve/root # 将空闲空间整合进入节点
+resize2fs /dev/mapper/pve-root # 校对服务器存储表项
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;完成这一步无报错，则完成整合&lt;/h3&gt;
+&lt;p&gt;感谢阅读&lt;/p&gt;
+</content:encoded></item><item><title>PVE部署DHCP服务</title><link>https://fuwari.vercel.app/posts/pve%E9%83%A8%E7%BD%B2dhcp%E6%9C%8D%E5%8A%A1/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/pve%E9%83%A8%E7%BD%B2dhcp%E6%9C%8D%E5%8A%A1/</guid><pubDate>Sat, 26 Jun 2021 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;开始之前，需要声明&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;该方案使用dnsmasq工具部署，其原理通用于物理&lt;/li&gt;
+&lt;li&gt;部署过程仅含网关路由转发与实现dhcp功能，不含防火墙规则设置DMZ规则及出入站流量控制请自行配置&lt;/li&gt;
+&lt;li&gt;需要子网掩码及地址规划相关基础知识前置&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;现在回归正题&lt;/h2&gt;
+&lt;h3&gt;首先我们需要在宿主机建立一个内网环境，外网出口计划在LXC容器上&lt;/h3&gt;
+&lt;h3&gt;你需要在 &lt;code&gt;节点&lt;/code&gt; -&amp;gt; &lt;code&gt;系统&lt;/code&gt; -&amp;gt; &lt;code&gt;网络&lt;/code&gt; 中添加：&lt;/h3&gt;
+&lt;h3&gt;建立OVS Bridge配置名称为eth1&lt;/h3&gt;
+&lt;h3&gt;建立OVS IntPort配置地址为10.0.0.2/27，名称为device2，桥接eth1&lt;/h3&gt;
+&lt;h3&gt;修改eth1配置桥接device2&lt;/h3&gt;
+&lt;p&gt;此时该局域网eth1还没正式建立，宿主机的地址仅为逻辑地址，是无法作用于局域网的&lt;/p&gt;
+&lt;h3&gt;eth1网段规划(可根据需求情况调整)&lt;/h3&gt;
+&lt;h3&gt;该局域网的网络地址为10.0.0.0，直接广播地址为10.0.0.31&lt;/h3&gt;
+&lt;h3&gt;该局域网的子网掩码为255.255.255.224，可用地址数为30个(含网关地址)&lt;/h3&gt;
+&lt;h3&gt;此时应该在宿主机上有个Linux Bridge的eth0是作为该局域网网关的WAN口，如果只做内网也可不用&lt;/h3&gt;
+&lt;h3&gt;容器服务部署&lt;/h3&gt;
+&lt;h3&gt;你可以根据模板搭建LXC容器，debian10/11环境均可&lt;/h3&gt;
+&lt;h3&gt;开启路由转发功能&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;sudo apt install net-tools -y &amp;amp;&amp;amp; netstat -nltp # 检查53端口是否被占用
+# 如果被占用，你需要使用systemctl工具关闭占用端口的相应服务
+sudo nano /etc/sysctl.conf # 编辑文件
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;找到以下内容并取消注释&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;net.ipv4.ip_forward=1
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;保存后你需要更新服务以生效&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;sudo sysctl -p
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;安装dnsmasq工具并部署服务&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;sudo apt install dnsmasq -y &amp;amp;&amp;amp; sudo systemctl enable dnsmasq &amp;amp;&amp;amp; sudo systemctl start dnsmasq
+sudo nano /etc/dnsmasq.conf # 编辑dnsmasq配置文件
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;根据网段规划加入以下内容&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;interface=eth1
+dhcp-range=10.0.0.2,10.0.0.30,255.255.255.224,24h
+dhcp-option=3,10.0.0.1
+dhcp-option=6,10.0.0.1
+
+server=223.5.5.5
+server=8.8.4.4
+domain-needed
+bogus-priv
+expand-hosts
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;意思是LXC容器本地的地址为10.0.0.1，同时也是局域网的网关，分配的dhcp范围10.0.0.2~10.0.0.30&lt;/p&gt;
+&lt;h3&gt;完成配置后可以回到宿主机编辑LXC容器配置文件&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;cd /etc/pve/lxc &amp;amp;&amp;amp; nano 100.conf # 假设该编号存储容器的配置信息
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;确保网络含以下内容&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;n0: name=eth0,bridge=eth0,gw=192.168.1.1,hwaddr=F2:70:C8:8D:93:EF,ip=192.168.1.15/24,type=veth
+n1: name=eth1,bridge=eth1,gw=192.168.1.15,hwaddr=56:DB:76:52:9F:56,ip=10.0.0.1/27,type=veth
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;你需要充分理解内容的含义，这部分就不解释了，完成后你需要重启LXC容器以应用配置&lt;/p&gt;
+&lt;p&gt;到这基本上已完成配置部署，此时容器为网关及dhcp服务器，宿主机及后面新建的所有容器虚拟机仅需以桥接模式使用eth1
+网络设置会自动分配内网地址，外部出入口流量会全部由该容器处理，所以对容器的负载均衡需要提前考虑&lt;/p&gt;
+&lt;p&gt;感谢阅读&lt;/p&gt;
+</content:encoded></item><item><title>PVE硬件直通</title><link>https://fuwari.vercel.app/posts/pve%E7%A1%AC%E4%BB%B6%E7%9B%B4%E9%80%9A/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/pve%E7%A1%AC%E4%BB%B6%E7%9B%B4%E9%80%9A/</guid><pubDate>Wed, 16 Jun 2021 00:00:00 GMT</pubDate><content:encoded>&lt;ul&gt;
+&lt;li&gt;注意: 该方案仅作用于虚拟机，对LXC容器无效
+硬件直通是老生常谈的事情，你在开始前要先搞明白自己的主板芯片组是怎么分布的，以及南桥与北桥的情况；如果你的需求仅仅是直通网卡、声卡、硬盘等PCI-e设备，要求没那么高，那成功率还是很高的；如果你的需求是直通核显、独显，那么你需要更多的去参考同类型的主板，找同类型的方案，成功率才会有所提高&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;讲个显卡直通的题外话&lt;/h2&gt;
+&lt;p&gt;不要听信网上有些神棍所谓的定制bios能一键核显/独显直通，其原理就是用ovmf模式套你主板的bios参数再换个引导界面皮，然后编程器编个二进制bios文件就给你用了，所有设置参数整合进grub文件里在宿主机启动时启动，说白了就是你理解透硬件直通的原理逻辑后，能实现的功能用神棍的方案也能实现，你实现不了的所谓的bios方案也搞不定，明白吧&lt;/p&gt;
+&lt;h3&gt;现在开始&lt;/h3&gt;
+&lt;h3&gt;设置grub启动引导&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;nano /etc/default/grub #编辑文件
+# 查找到 GRUB_CMDLINE_LINUX_DEFAULT 的部分，调整为以下内容
+GRUB_CMDLINE_LINUX_DEFAULT=&quot;quiet intel_iommu=on iommu=pt video=efifb:off&quot;
+# 完成后记得更新下引导文件
+update-grub || update-grub2
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;开启直通模组&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;nano /etc/modules # 加入以下内容
+# 开启vfio模组驱动程序
+vfio
+vfio_iommu_typel
+vfio_pci
+vfio_virqfd
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;完成后，重启宿主机，基本上到这一步网卡、声卡、硬盘等PCI-e设备已经是可以直通了&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;lspci -nnk # 查看硬件当前驱动
+# 如果你需要直通的设备 Kernel driver in use: 后无内容，说明可以了
+# 在前端仪表台加入PCI-e设备即可
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;进阶设置，刚刚说到内核驱动无内容，如果有内容怎么办？我们将其加入黑名单&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;nano /etc/modprobe.d/pve-blacklist.conf
+# 加入以下内容
+# 将不需要的内核驱动加入黑名单
+blacklist nvidiafb
+blacklist snd_hda_intel
+blacklist snd_hda_codec_hdmi
+blacklist i915
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;如果是直通显卡的，还需要将显卡的编号加入vfio模组&lt;/h3&gt;
+&lt;p&gt;感谢阅读&lt;/p&gt;
+</content:encoded></item><item><title>PVE容器LXC嵌套</title><link>https://fuwari.vercel.app/posts/pve%E5%AE%B9%E5%99%A8lxc%E5%B5%8C%E5%A5%97/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/pve%E5%AE%B9%E5%99%A8lxc%E5%B5%8C%E5%A5%97/</guid><pubDate>Mon, 14 Jun 2021 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;从功耗比上看，lxc容器与PVE环境更匹配&lt;/p&gt;
+&lt;h2&gt;2步开启宿主机多层嵌套&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;首先在CT模板关闭状态下，不要勾选 &lt;code&gt;无特权容器&lt;/code&gt; 并且在 &lt;code&gt;选项&lt;/code&gt; → 功能勾选 &lt;code&gt;嵌套&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;进入宿主机tty命令行模式&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code&gt;cd /etc/pve/lxc # 进入目录
+nano xxx.conf   # 针对需要嵌套的容器配置文件进行修改
+# 对容器的配置文件增加以下内容
+lxc.apparmor.profile: unconfined
+lxc.cgroup.devices.allow: a
+lxc.cap.drop:
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;保存退出后，前端或后端启动相应的容器
+确认容器是否已启用嵌套虚拟化，需要进入容器命令行界面&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;grep -cw vmx /proc/cpuinfo
+# 如果输出为 0，则表示虚拟化支持未启用
+# 如果输出为大于 0 的数字，则表示虚拟化支持已启用
+&lt;/code&gt;&lt;/pre&gt;
+&lt;hr /&gt;
+&lt;p&gt;以上便是本章节全部内容&lt;/p&gt;
+</content:encoded></item></channel></rss>
