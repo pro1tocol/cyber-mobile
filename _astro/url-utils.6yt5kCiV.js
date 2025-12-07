@@ -1,1 +1,0 @@
-import"./zh_TW.DW2Wm2M3.js";function s(e,o){const n=e.replace(/^\/|\/$/g,"").toLowerCase(),r=o.replace(/^\/|\/$/g,"").toLowerCase();return n===r}function t(...e){return e.join("/").replace(/\/+/g,"/")}function u(e){return a(`/posts/${e}/`)}function a(e){return t("","/cyber-mobile/",e)}export{u as g,s as p,a as u};

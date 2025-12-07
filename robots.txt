@@ -1,4 +1,4 @@
 User-agent: *
 Disallow: /_astro/
 
-Sitemap: https://pro1tocol.github.io/cyber-mobile/sitemap-index.xml
+Sitemap: https://cyber-mobile.net/sitemap-index.xml
