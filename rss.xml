@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?><rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>DUK技术栈</title><description>v3.8.313</description><link>https://pro1tocol.github.io/</link><language>zh_CN</language><item><title>部署NFS实例</title><link>https://pro1tocol.github.io/cyber-mobile/posts/%E9%83%A8%E7%BD%B2nfs%E5%AE%9E%E4%BE%8B/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/%E9%83%A8%E7%BD%B2nfs%E5%AE%9E%E4%BE%8B/</guid><pubDate>Fri, 01 Aug 2025 00:00:00 GMT</pubDate><content:encoded>&lt;ul&gt;
+<?xml version="1.0" encoding="UTF-8"?><rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>DUK技术栈</title><description>v3.8.313</description><link>https://cyber-mobile.net/</link><language>zh_CN</language><item><title>部署NFS实例</title><link>https://cyber-mobile.net/posts/%E9%83%A8%E7%BD%B2nfs%E5%AE%9E%E4%BE%8B/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/%E9%83%A8%E7%BD%B2nfs%E5%AE%9E%E4%BE%8B/</guid><pubDate>Fri, 01 Aug 2025 00:00:00 GMT</pubDate><content:encoded>&lt;ul&gt;
 &lt;li&gt;注意：NFS 服务严格依赖 RPC 服务&lt;/li&gt;
 &lt;/ul&gt;
 &lt;p&gt;如对RPC服务及端口不信任的，可以终止搭建了&lt;/p&gt;
@@ -53,7 +53,7 @@ sudo systemctl disable --stop rpcbind.service
 &lt;/code&gt;&lt;/pre&gt;
 &lt;h3&gt;以上便是本章节全部内容&lt;/h3&gt;
 &lt;h3&gt;感谢阅读&lt;/h3&gt;
-</content:encoded></item><item><title>软RAID实现</title><link>https://pro1tocol.github.io/cyber-mobile/posts/%E8%BD%AFraid%E5%AE%9E%E7%8E%B0/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/%E8%BD%AFraid%E5%AE%9E%E7%8E%B0/</guid><pubDate>Sun, 11 May 2025 00:00:00 GMT</pubDate><content:encoded>&lt;h3&gt;本文主要介绍在Linux环境下使用systemd-boot结合mdadm实现软件层面的raid冗余&lt;/h3&gt;
+</content:encoded></item><item><title>软RAID实现</title><link>https://cyber-mobile.net/posts/%E8%BD%AFraid%E5%AE%9E%E7%8E%B0/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/%E8%BD%AFraid%E5%AE%9E%E7%8E%B0/</guid><pubDate>Sun, 11 May 2025 00:00:00 GMT</pubDate><content:encoded>&lt;h3&gt;本文主要介绍在Linux环境下使用systemd-boot结合mdadm实现软件层面的raid冗余&lt;/h3&gt;
 &lt;blockquote&gt;
 &lt;p&gt;思维拓扑&lt;/p&gt;
 &lt;/blockquote&gt;
@@ -161,7 +161,7 @@ sudo umount -R /mnt
 &lt;/code&gt;&lt;/pre&gt;
 &lt;h3&gt;以上为本篇文章全部内容&lt;/h3&gt;
 &lt;h3&gt;感谢阅读&lt;/h3&gt;
-</content:encoded></item><item><title>使用git管理仓库</title><link>https://pro1tocol.github.io/cyber-mobile/posts/%E4%BD%BF%E7%94%A8git%E7%AE%A1%E7%90%86%E4%BB%93%E5%BA%93/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/%E4%BD%BF%E7%94%A8git%E7%AE%A1%E7%90%86%E4%BB%93%E5%BA%93/</guid><pubDate>Fri, 02 May 2025 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;本文主要介绍如何使用git命令管理仓库&lt;/h2&gt;
+</content:encoded></item><item><title>使用git管理仓库</title><link>https://cyber-mobile.net/posts/%E4%BD%BF%E7%94%A8git%E7%AE%A1%E7%90%86%E4%BB%93%E5%BA%93/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/%E4%BD%BF%E7%94%A8git%E7%AE%A1%E7%90%86%E4%BB%93%E5%BA%93/</guid><pubDate>Fri, 02 May 2025 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;本文主要介绍如何使用git命令管理仓库&lt;/h2&gt;
 &lt;h3&gt;配置访问用户&lt;/h3&gt;
 &lt;h3&gt;本文仅使用用户级(非全局配置)&lt;/h3&gt;
 &lt;pre&gt;&lt;code&gt;git config --global user.name &quot;name&quot; # 配置用户名
@@ -204,7 +204,7 @@ git push origin main2 # 将本地仓库分支上传至远端仓库
 &lt;/code&gt;&lt;/pre&gt;
 &lt;h3&gt;以上便是本篇文章的全部内容&lt;/h3&gt;
 &lt;h3&gt;感谢阅读&lt;/h3&gt;
-</content:encoded></item><item><title>Systemd-boot引导</title><link>https://pro1tocol.github.io/cyber-mobile/posts/systemd-boot%E5%BC%95%E5%AF%BC/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/systemd-boot%E5%BC%95%E5%AF%BC/</guid><pubDate>Thu, 27 Mar 2025 00:00:00 GMT</pubDate><content:encoded>&lt;h3&gt;本文参考自UP主&lt;a href=&quot;https://www.bilibili.com/video/BV1kdLqzeEBA/?spm_id_from=333.337.search-card.all.click&quot;&gt;unixchad&lt;/a&gt;的教程及&lt;a href=&quot;https://wiki.archlinuxcn.org/wiki/Systemd-boot&quot;&gt;Arch Wiki&lt;/a&gt;相关文章&lt;/h3&gt;
+</content:encoded></item><item><title>Systemd-boot引导</title><link>https://cyber-mobile.net/posts/systemd-boot%E5%BC%95%E5%AF%BC/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/systemd-boot%E5%BC%95%E5%AF%BC/</guid><pubDate>Thu, 27 Mar 2025 00:00:00 GMT</pubDate><content:encoded>&lt;h3&gt;本文参考自UP主&lt;a href=&quot;https://www.bilibili.com/video/BV1kdLqzeEBA/?spm_id_from=333.337.search-card.all.click&quot;&gt;unixchad&lt;/a&gt;的教程及&lt;a href=&quot;https://wiki.archlinuxcn.org/wiki/Systemd-boot&quot;&gt;Arch Wiki&lt;/a&gt;相关文章&lt;/h3&gt;
 &lt;h3&gt;流程分解&lt;/h3&gt;
 &lt;p&gt;步骤&lt;/p&gt;
 &lt;hr /&gt;
@@ -269,7 +269,7 @@ sudo efibootmgr -b 0 -B
 &lt;/code&gt;&lt;/pre&gt;
 &lt;h3&gt;以上便是本篇文章全部内容&lt;/h3&gt;
 &lt;h3&gt;感谢阅读&lt;/h3&gt;
-</content:encoded></item><item><title>Linux查看存储</title><link>https://pro1tocol.github.io/cyber-mobile/posts/linux%E6%9F%A5%E7%9C%8B%E5%AD%98%E5%82%A8/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/linux%E6%9F%A5%E7%9C%8B%E5%AD%98%E5%82%A8/</guid><pubDate>Mon, 10 Mar 2025 00:00:00 GMT</pubDate><content:encoded>&lt;blockquote&gt;
+</content:encoded></item><item><title>Linux查看存储</title><link>https://cyber-mobile.net/posts/linux%E6%9F%A5%E7%9C%8B%E5%AD%98%E5%82%A8/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/linux%E6%9F%A5%E7%9C%8B%E5%AD%98%E5%82%A8/</guid><pubDate>Mon, 10 Mar 2025 00:00:00 GMT</pubDate><content:encoded>&lt;blockquote&gt;
 &lt;p&gt;关于Linux环境下查看存储使用情况&lt;/p&gt;
 &lt;/blockquote&gt;
 &lt;h3&gt;主要分为两个板块：&lt;code&gt;内部存储&lt;/code&gt; &lt;code&gt;外部存储&lt;/code&gt;&lt;/h3&gt;
@@ -315,7 +315,7 @@ parted /dev/sda
 &lt;/code&gt;&lt;/pre&gt;
 &lt;h3&gt;以上便是本章节全部内容&lt;/h3&gt;
 &lt;h3&gt;感谢阅读&lt;/h3&gt;
-</content:encoded></item><item><title>查看Linux内核版本</title><link>https://pro1tocol.github.io/cyber-mobile/posts/%E6%9F%A5%E7%9C%8Blinux%E5%86%85%E6%A0%B8%E7%89%88%E6%9C%AC/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/%E6%9F%A5%E7%9C%8Blinux%E5%86%85%E6%A0%B8%E7%89%88%E6%9C%AC/</guid><pubDate>Mon, 10 Mar 2025 00:00:00 GMT</pubDate><content:encoded>&lt;blockquote&gt;
+</content:encoded></item><item><title>查看Linux内核版本</title><link>https://cyber-mobile.net/posts/%E6%9F%A5%E7%9C%8Blinux%E5%86%85%E6%A0%B8%E7%89%88%E6%9C%AC/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/%E6%9F%A5%E7%9C%8Blinux%E5%86%85%E6%A0%B8%E7%89%88%E6%9C%AC/</guid><pubDate>Mon, 10 Mar 2025 00:00:00 GMT</pubDate><content:encoded>&lt;blockquote&gt;
 &lt;p&gt;本文主要针对如何查看系统内核及版本&lt;/p&gt;
 &lt;/blockquote&gt;
 &lt;h3&gt;需要进行的相关操作 &lt;code&gt;命令&lt;/code&gt; 进行系统梳理&lt;/h3&gt;
@@ -344,7 +344,7 @@ cat /proc/sys/kernel/osrelease # 查看系统内核版本
 &lt;/code&gt;&lt;/pre&gt;
 &lt;h3&gt;以上是本章节全部内容&lt;/h3&gt;
 &lt;h3&gt;感谢阅读&lt;/h3&gt;
-</content:encoded></item><item><title>压缩工具TAR</title><link>https://pro1tocol.github.io/cyber-mobile/posts/%E5%8E%8B%E7%BC%A9%E5%B7%A5%E5%85%B7tar/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/%E5%8E%8B%E7%BC%A9%E5%B7%A5%E5%85%B7tar/</guid><pubDate>Sun, 09 Mar 2025 00:00:00 GMT</pubDate><content:encoded>&lt;blockquote&gt;
+</content:encoded></item><item><title>压缩工具TAR</title><link>https://cyber-mobile.net/posts/%E5%8E%8B%E7%BC%A9%E5%B7%A5%E5%85%B7tar/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/%E5%8E%8B%E7%BC%A9%E5%B7%A5%E5%85%B7tar/</guid><pubDate>Sun, 09 Mar 2025 00:00:00 GMT</pubDate><content:encoded>&lt;blockquote&gt;
 &lt;p&gt;本文主要对压缩工具tar的日常使用方法进行梳理&lt;/p&gt;
 &lt;/blockquote&gt;
 &lt;h3&gt;相关参考资料来源于网络，请读者自行测试&lt;/h3&gt;
@@ -421,7 +421,7 @@ tar -xJvf attach.tar.xz # 解压.tar.xz压缩包至当前目录，此时会释�
 &lt;/code&gt;&lt;/pre&gt;
 &lt;h3&gt;以上便是本章节全部内容&lt;/h3&gt;
 &lt;h3&gt;感谢阅读&lt;/h3&gt;
-</content:encoded></item><item><title>压缩工具ZIP与RAR</title><link>https://pro1tocol.github.io/cyber-mobile/posts/%E5%8E%8B%E7%BC%A9%E5%B7%A5%E5%85%B7zip%E4%B8%8Erar/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/%E5%8E%8B%E7%BC%A9%E5%B7%A5%E5%85%B7zip%E4%B8%8Erar/</guid><pubDate>Sun, 09 Mar 2025 00:00:00 GMT</pubDate><content:encoded>&lt;blockquote&gt;
+</content:encoded></item><item><title>压缩工具ZIP与RAR</title><link>https://cyber-mobile.net/posts/%E5%8E%8B%E7%BC%A9%E5%B7%A5%E5%85%B7zip%E4%B8%8Erar/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/%E5%8E%8B%E7%BC%A9%E5%B7%A5%E5%85%B7zip%E4%B8%8Erar/</guid><pubDate>Sun, 09 Mar 2025 00:00:00 GMT</pubDate><content:encoded>&lt;blockquote&gt;
 &lt;p&gt;本文主要对压缩工具zip与rar的日常使用方法进行梳理&lt;/p&gt;
 &lt;/blockquote&gt;
 &lt;h3&gt;内容来源于网络，本文仅作整合，实际情况请自行测试&lt;/h3&gt;
@@ -533,7 +533,7 @@ unrar x attach.rar -d /attach # 解压包到指定路径
 &lt;/code&gt;&lt;/pre&gt;
 &lt;h3&gt;以上便是本章节全部内容&lt;/h3&gt;
 &lt;h3&gt;感谢阅读&lt;/h3&gt;
-</content:encoded></item><item><title>RANGER使用指导</title><link>https://pro1tocol.github.io/cyber-mobile/posts/ranger%E4%BD%BF%E7%94%A8%E6%8C%87%E5%AF%BC/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/ranger%E4%BD%BF%E7%94%A8%E6%8C%87%E5%AF%BC/</guid><pubDate>Fri, 07 Mar 2025 00:00:00 GMT</pubDate><content:encoded>&lt;h3&gt;本文主要对终端命令行下文件管理器ranger的使用方法进行梳理&lt;/h3&gt;
+</content:encoded></item><item><title>RANGER使用指导</title><link>https://cyber-mobile.net/posts/ranger%E4%BD%BF%E7%94%A8%E6%8C%87%E5%AF%BC/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/ranger%E4%BD%BF%E7%94%A8%E6%8C%87%E5%AF%BC/</guid><pubDate>Fri, 07 Mar 2025 00:00:00 GMT</pubDate><content:encoded>&lt;h3&gt;本文主要对终端命令行下文件管理器ranger的使用方法进行梳理&lt;/h3&gt;
 &lt;blockquote&gt;
 &lt;p&gt;如遇增补内容会实时更新&lt;/p&gt;
 &lt;/blockquote&gt;
@@ -597,7 +597,7 @@ pp  # 文件粘贴
 &lt;/code&gt;&lt;/pre&gt;
 &lt;h3&gt;以上便是本章节全部内容&lt;/h3&gt;
 &lt;h3&gt;感谢阅读&lt;/h3&gt;
-</content:encoded></item><item><title>分屏工具TMUX</title><link>https://pro1tocol.github.io/cyber-mobile/posts/%E5%88%86%E5%B1%8F%E5%B7%A5%E5%85%B7tmux/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/%E5%88%86%E5%B1%8F%E5%B7%A5%E5%85%B7tmux/</guid><pubDate>Fri, 07 Mar 2025 00:00:00 GMT</pubDate><content:encoded>&lt;h3&gt;本章节主要针对终端命令行状态下的分屏工具TMUX梳理使用指导&lt;/h3&gt;
+</content:encoded></item><item><title>分屏工具TMUX</title><link>https://cyber-mobile.net/posts/%E5%88%86%E5%B1%8F%E5%B7%A5%E5%85%B7tmux/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/%E5%88%86%E5%B1%8F%E5%B7%A5%E5%85%B7tmux/</guid><pubDate>Fri, 07 Mar 2025 00:00:00 GMT</pubDate><content:encoded>&lt;h3&gt;本章节主要针对终端命令行状态下的分屏工具TMUX梳理使用指导&lt;/h3&gt;
 &lt;blockquote&gt;
 &lt;p&gt;如遇到增补内容会实时更新&lt;/p&gt;
 &lt;/blockquote&gt;
@@ -633,7 +633,7 @@ Ctrl + b + Ctrl + &amp;lt;up/down/lift/right&amp;gt; # 按照箭头方向调整�
 &lt;/code&gt;&lt;/pre&gt;
 &lt;h3&gt;以上便是本章节全部内容&lt;/h3&gt;
 &lt;h3&gt;感谢阅读&lt;/h3&gt;
-</content:encoded></item><item><title>编辑器VI及VIM</title><link>https://pro1tocol.github.io/cyber-mobile/posts/%E7%BC%96%E8%BE%91%E5%99%A8vi%E5%8F%8Avim/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/%E7%BC%96%E8%BE%91%E5%99%A8vi%E5%8F%8Avim/</guid><pubDate>Tue, 04 Feb 2025 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;本操作指导针对vi/vim编辑器的日常操作进行梳理&lt;/h2&gt;
+</content:encoded></item><item><title>编辑器VI及VIM</title><link>https://cyber-mobile.net/posts/%E7%BC%96%E8%BE%91%E5%99%A8vi%E5%8F%8Avim/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/%E7%BC%96%E8%BE%91%E5%99%A8vi%E5%8F%8Avim/</guid><pubDate>Tue, 04 Feb 2025 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;本操作指导针对vi/vim编辑器的日常操作进行梳理&lt;/h2&gt;
 &lt;h3&gt;该编辑器共有两种模式：&lt;code&gt;查看模式&lt;/code&gt; 与 &lt;code&gt;编辑模式&lt;/code&gt;&lt;/h3&gt;
 &lt;blockquote&gt;
 &lt;p&gt;基础方法&lt;/p&gt;
@@ -806,7 +806,7 @@ u # 回退批量替换
 &lt;/code&gt;&lt;/pre&gt;
 &lt;h3&gt;以上便是本章节全部内容&lt;/h3&gt;
 &lt;h3&gt;感谢阅读&lt;/h3&gt;
-</content:encoded></item><item><title>60配列键盘操作</title><link>https://pro1tocol.github.io/cyber-mobile/posts/60%E9%85%8D%E5%88%97%E9%94%AE%E7%9B%98%E6%93%8D%E4%BD%9C/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/60%E9%85%8D%E5%88%97%E9%94%AE%E7%9B%98%E6%93%8D%E4%BD%9C/</guid><pubDate>Sat, 01 Feb 2025 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;本操作指导仅针对61部分通用型机械键盘定义&lt;/h2&gt;
+</content:encoded></item><item><title>60配列键盘操作</title><link>https://cyber-mobile.net/posts/60%E9%85%8D%E5%88%97%E9%94%AE%E7%9B%98%E6%93%8D%E4%BD%9C/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/60%E9%85%8D%E5%88%97%E9%94%AE%E7%9B%98%E6%93%8D%E4%BD%9C/</guid><pubDate>Sat, 01 Feb 2025 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;本操作指导仅针对61部分通用型机械键盘定义&lt;/h2&gt;
 &lt;h3&gt;并不包含所有键盘，请酌情使用&lt;/h3&gt;
 &lt;table&gt;
 &lt;thead&gt;
@@ -860,7 +860,7 @@ u # 回退批量替换
 &lt;/table&gt;
 &lt;h3&gt;以上便是本章节全部内容&lt;/h3&gt;
 &lt;h3&gt;如有变动实时更新&lt;/h3&gt;
-</content:encoded></item><item><title>TLS证书申请</title><link>https://pro1tocol.github.io/cyber-mobile/posts/tls%E8%AF%81%E4%B9%A6%E7%94%B3%E8%AF%B7/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/tls%E8%AF%81%E4%B9%A6%E7%94%B3%E8%AF%B7/</guid><pubDate>Fri, 03 Jan 2025 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;本篇文章基于Github项目的ACME脚本&lt;/h2&gt;
+</content:encoded></item><item><title>TLS证书申请</title><link>https://cyber-mobile.net/posts/tls%E8%AF%81%E4%B9%A6%E7%94%B3%E8%AF%B7/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/tls%E8%AF%81%E4%B9%A6%E7%94%B3%E8%AF%B7/</guid><pubDate>Fri, 03 Jan 2025 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;本篇文章基于Github项目的ACME脚本&lt;/h2&gt;
 &lt;ul&gt;
 &lt;li&gt;注意：我个人是不建议小白或新人使用脚本的，那会使你一直是小白&lt;/li&gt;
 &lt;/ul&gt;
@@ -892,7 +892,7 @@ acme.sh --set-default-ca --server zerossl
 &lt;/code&gt;&lt;/pre&gt;
 &lt;h3&gt;好了，到此你的网站证书就申请完成，如何使用就不展开细说了&lt;/h3&gt;
 &lt;p&gt;以上便是本篇文章的全部内容，感谢阅读&lt;/p&gt;
-</content:encoded></item><item><title>自签证书生成</title><link>https://pro1tocol.github.io/cyber-mobile/posts/%E8%87%AA%E7%AD%BE%E8%AF%81%E4%B9%A6%E7%94%9F%E6%88%90/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/%E8%87%AA%E7%AD%BE%E8%AF%81%E4%B9%A6%E7%94%9F%E6%88%90/</guid><pubDate>Thu, 02 Jan 2025 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;生成自签证书需要openssl工具支持&lt;/h2&gt;
+</content:encoded></item><item><title>自签证书生成</title><link>https://cyber-mobile.net/posts/%E8%87%AA%E7%AD%BE%E8%AF%81%E4%B9%A6%E7%94%9F%E6%88%90/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/%E8%87%AA%E7%AD%BE%E8%AF%81%E4%B9%A6%E7%94%9F%E6%88%90/</guid><pubDate>Thu, 02 Jan 2025 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;生成自签证书需要openssl工具支持&lt;/h2&gt;
 &lt;p&gt;没有安装的可以自行安装&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;废话不多直接上命令&lt;/li&gt;
@@ -906,7 +906,7 @@ acme.sh --set-default-ca --server zerossl
 &lt;/code&gt;&lt;/pre&gt;
 &lt;h3&gt;可根据自身实际情况调整命令内容&lt;/h3&gt;
 &lt;p&gt;以上为本章节全部内容，感谢阅读&lt;/p&gt;
-</content:encoded></item><item><title>扫描工具ZMap</title><link>https://pro1tocol.github.io/cyber-mobile/posts/%E6%89%AB%E6%8F%8F%E5%B7%A5%E5%85%B7zmap/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/%E6%89%AB%E6%8F%8F%E5%B7%A5%E5%85%B7zmap/</guid><pubDate>Tue, 25 Jun 2024 00:00:00 GMT</pubDate><content:encoded>&lt;ul&gt;
+</content:encoded></item><item><title>扫描工具ZMap</title><link>https://cyber-mobile.net/posts/%E6%89%AB%E6%8F%8F%E5%B7%A5%E5%85%B7zmap/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/%E6%89%AB%E6%8F%8F%E5%B7%A5%E5%85%B7zmap/</guid><pubDate>Tue, 25 Jun 2024 00:00:00 GMT</pubDate><content:encoded>&lt;ul&gt;
 &lt;li&gt;ZMap是一款网络扫描工具，由University of Michigan的一组研究人员开发的，并在2013年发布&lt;/li&gt;
 &lt;/ul&gt;
 &lt;h3&gt;它的设计目标是使用户能够在几分钟内扫描完整个IPv4地址空间，这是一个包含约42亿个IP地址的巨大空间&lt;/h3&gt;
@@ -926,7 +926,7 @@ zmap -p &amp;lt;port&amp;gt; -rate &amp;lt;packets_per_second&amp;gt; -o &amp;lt
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;以上便是本篇文章的全部内容，当然这些命令只是ZMap的一小部分功能示例
 ZMap提供了更多选项和功能，用户可以通过查阅官方文档和帮助信息来了解更多详细信息和命令选项&lt;/p&gt;
-</content:encoded></item><item><title>Python2编译pyrit</title><link>https://pro1tocol.github.io/cyber-mobile/posts/python2%E7%BC%96%E8%AF%91pyrit/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/python2%E7%BC%96%E8%AF%91pyrit/</guid><pubDate>Mon, 24 Jun 2024 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;简单介绍：Pyrit 是一个用于无线网络渗透测试的开源工具，主要用于破解WPA/WPA2-PSK加密的Wi-Fi密码&lt;/p&gt;
+</content:encoded></item><item><title>Python2编译pyrit</title><link>https://cyber-mobile.net/posts/python2%E7%BC%96%E8%AF%91pyrit/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/python2%E7%BC%96%E8%AF%91pyrit/</guid><pubDate>Mon, 24 Jun 2024 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;简单介绍：Pyrit 是一个用于无线网络渗透测试的开源工具，主要用于破解WPA/WPA2-PSK加密的Wi-Fi密码&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;注意：未经授权的使用 Pyrit 或进行未经授权的密码破解是违法行为&lt;/li&gt;
 &lt;/ul&gt;
@@ -971,7 +971,7 @@ reboot # 重启系统环境
   sudo apt -y install pyrit
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;感谢阅读&lt;/p&gt;
-</content:encoded></item><item><title>Linux各端口的关闭</title><link>https://pro1tocol.github.io/cyber-mobile/posts/linux%E5%90%84%E7%AB%AF%E5%8F%A3%E7%9A%84%E5%85%B3%E9%97%AD/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/linux%E5%90%84%E7%AB%AF%E5%8F%A3%E7%9A%84%E5%85%B3%E9%97%AD/</guid><pubDate>Sun, 23 Jun 2024 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;有句话叫什么...&lt;/p&gt;
+</content:encoded></item><item><title>Linux各端口的关闭</title><link>https://cyber-mobile.net/posts/linux%E5%90%84%E7%AB%AF%E5%8F%A3%E7%9A%84%E5%85%B3%E9%97%AD/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/linux%E5%90%84%E7%AB%AF%E5%8F%A3%E7%9A%84%E5%85%B3%E9%97%AD/</guid><pubDate>Sun, 23 Jun 2024 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;有句话叫什么...&lt;/p&gt;
 &lt;h2&gt;开放的端口，是被入侵的开始&lt;/h2&gt;
 &lt;h3&gt;这3种网络管理守护进程是Linux系统下常用的进程间互斥同步&lt;/h3&gt;
 &lt;p&gt;假如一个设备没有开放的逻辑端口，并且没有连接网络
@@ -1028,7 +1028,7 @@ reboot
 netstat -anp | grep 5353
 netstat -nltp
 &lt;/code&gt;&lt;/pre&gt;
-</content:encoded></item><item><title>Redir与Socat重定向</title><link>https://pro1tocol.github.io/cyber-mobile/posts/redir%E4%B8%8Esocat%E9%87%8D%E5%AE%9A%E5%90%91/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/redir%E4%B8%8Esocat%E9%87%8D%E5%AE%9A%E5%90%91/</guid><pubDate>Sun, 23 Jun 2024 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;在本篇文章开始前，我还是需要再次声明，工具是人在使用，工具无分好坏，用法则存在差异请各位读者自行斟酌&lt;/p&gt;
+</content:encoded></item><item><title>Redir与Socat重定向</title><link>https://cyber-mobile.net/posts/redir%E4%B8%8Esocat%E9%87%8D%E5%AE%9A%E5%90%91/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/redir%E4%B8%8Esocat%E9%87%8D%E5%AE%9A%E5%90%91/</guid><pubDate>Sun, 23 Jun 2024 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;在本篇文章开始前，我还是需要再次声明，工具是人在使用，工具无分好坏，用法则存在差异请各位读者自行斟酌&lt;/p&gt;
 &lt;h3&gt;流量转发是指将网络中的数据包从一个位置转发到另一个位置的过程&lt;/h3&gt;
 &lt;ul&gt;
 &lt;li&gt;可以设置负载均衡策略，将流量在多个路径之间进行平衡，以提高网络的性能和可靠性&lt;/li&gt;
@@ -1080,7 +1080,7 @@ socat TCP4-LISTEN:52,reuseaddr,fork TCP4:test.com:443 # tcp传输
 &lt;h3&gt;redir提供了一种更简单的方式来进行端口重定向，而socat提供了更丰富的功能和更高级的数据处理能力；如果您只需要简单的端口转发功能，redir可能是一个更适合的选择；但如果您需要更复杂的功能和定制选项，socat可能更适合您的需求&lt;/h3&gt;
 &lt;h3&gt;以上便是本篇文章的全部内容&lt;/h3&gt;
 &lt;p&gt;感谢阅读&lt;/p&gt;
-</content:encoded></item><item><title>容器部署OwnCloud</title><link>https://pro1tocol.github.io/cyber-mobile/posts/%E5%AE%B9%E5%99%A8%E9%83%A8%E7%BD%B2owncloud/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/%E5%AE%B9%E5%99%A8%E9%83%A8%E7%BD%B2owncloud/</guid><pubDate>Sat, 22 Jun 2024 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;本站曾经搭建过共用云盘，奈何服务器的容量太小了，还每日每夜的被打&lt;/p&gt;
+</content:encoded></item><item><title>容器部署OwnCloud</title><link>https://cyber-mobile.net/posts/%E5%AE%B9%E5%99%A8%E9%83%A8%E7%BD%B2owncloud/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/%E5%AE%B9%E5%99%A8%E9%83%A8%E7%BD%B2owncloud/</guid><pubDate>Sat, 22 Jun 2024 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;本站曾经搭建过共用云盘，奈何服务器的容量太小了，还每日每夜的被打&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;该云盘适合个人用，太多人存取比较考验服务器硬件性能，请量力而行&lt;/li&gt;
 &lt;/ul&gt;
@@ -1245,7 +1245,7 @@ http {
 &lt;/code&gt;&lt;/pre&gt;
 &lt;h3&gt;运行该项目，记住防火墙或者云服务器策略组打开80与443端口，该配置会将流量强制进行tls加密，对于个人云盘来说这是在数据存取得过程中很好的加密方式&lt;/h3&gt;
 &lt;p&gt;以上便是本篇文章的全部内容，感谢阅读&lt;/p&gt;
-</content:encoded></item><item><title>部署Chocolatey</title><link>https://pro1tocol.github.io/cyber-mobile/posts/%E9%83%A8%E7%BD%B2chocolatey/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/%E9%83%A8%E7%BD%B2chocolatey/</guid><pubDate>Thu, 20 Jun 2024 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;即使WIN系统下也可以实现命令行安装工具&lt;/h2&gt;
+</content:encoded></item><item><title>部署Chocolatey</title><link>https://cyber-mobile.net/posts/%E9%83%A8%E7%BD%B2chocolatey/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/%E9%83%A8%E7%BD%B2chocolatey/</guid><pubDate>Thu, 20 Jun 2024 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;即使WIN系统下也可以实现命令行安装工具&lt;/h2&gt;
 &lt;p&gt;很多朋友可能还不熟悉这个工具，先简单介绍下Chocolatey是一个Windows平台上的包管理器，它允许用户通过命令行界面或图形用户界面轻松地安装、升级和卸载软件包。它的目标是简化Windows软件的安装和管理过程，类似于Linux上的包管理器（如apt、yum或dnf）&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;项目地址： &lt;a href=&quot;https://chocolatey.org/&quot;&gt;chocolatey.org&lt;/a&gt;&lt;/li&gt;
@@ -1277,7 +1277,7 @@ choco install winfetch
 &lt;/code&gt;&lt;/pre&gt;
 &lt;h3&gt;以上便是本篇文章的全部内容&lt;/h3&gt;
 &lt;p&gt;感谢阅读&lt;/p&gt;
-</content:encoded></item><item><title>传输SCP工具</title><link>https://pro1tocol.github.io/cyber-mobile/posts/%E4%BC%A0%E8%BE%93scp%E5%B7%A5%E5%85%B7/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/%E4%BC%A0%E8%BE%93scp%E5%B7%A5%E5%85%B7/</guid><pubDate>Wed, 19 Jun 2024 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;Telnet和SSH都是用于远程连接的工具，但它们之间存在很大的差别
+</content:encoded></item><item><title>传输SCP工具</title><link>https://cyber-mobile.net/posts/%E4%BC%A0%E8%BE%93scp%E5%B7%A5%E5%85%B7/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/%E4%BC%A0%E8%BE%93scp%E5%B7%A5%E5%85%B7/</guid><pubDate>Wed, 19 Jun 2024 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;Telnet和SSH都是用于远程连接的工具，但它们之间存在很大的差别
 国内的大多数基础教材还在教授使用telnet工具
 但telnet工具的传输过程是明文的，存在一定的安全性问题&lt;/p&gt;
 &lt;h2&gt;因此SSH工具更加安全、功能更强大、速度更快，更加适合在安全性要求较高的环境中使用&lt;/h2&gt;
@@ -1327,7 +1327,7 @@ scp -p 55 -r username@remote_host:/usr/bin/fukputin &apos;C:\\Users\\fukputin\\D
 # 意思是将远程主机整个fukputin文件夹取回到本地下载的目录下
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;以上就是本章节的所有内容&lt;/p&gt;
-</content:encoded></item><item><title>Linux_LVM分区挂载</title><link>https://pro1tocol.github.io/cyber-mobile/posts/linuxlvm%E5%88%86%E5%8C%BA%E6%8C%82%E8%BD%BD/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/linuxlvm%E5%88%86%E5%8C%BA%E6%8C%82%E8%BD%BD/</guid><pubDate>Tue, 18 Jun 2024 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;对于分区的设置为LVM的格式就不再过多赘述了&lt;/h2&gt;
+</content:encoded></item><item><title>Linux_LVM分区挂载</title><link>https://cyber-mobile.net/posts/linuxlvm%E5%88%86%E5%8C%BA%E6%8C%82%E8%BD%BD/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/linuxlvm%E5%88%86%E5%8C%BA%E6%8C%82%E8%BD%BD/</guid><pubDate>Tue, 18 Jun 2024 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;对于分区的设置为LVM的格式就不再过多赘述了&lt;/h2&gt;
 &lt;p&gt;不是很明白LVM格式的可自行查阅相关资料&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;开始前需要查看磁盘状态&lt;/li&gt;
@@ -1375,7 +1375,7 @@ lvs # 命令检查LVM分区情况
 mkdir -p /mnt/boot/efi # 创建efi引导启动目录
 mount /dev/sda1 /mnt/boot/efi # 将efi引导分区挂载启动目录
 &lt;/code&gt;&lt;/pre&gt;
-</content:encoded></item><item><title>Linux物理分区挂载</title><link>https://pro1tocol.github.io/cyber-mobile/posts/linux%E7%89%A9%E7%90%86%E5%88%86%E5%8C%BA%E6%8C%82%E8%BD%BD/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/linux%E7%89%A9%E7%90%86%E5%88%86%E5%8C%BA%E6%8C%82%E8%BD%BD/</guid><pubDate>Tue, 18 Jun 2024 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;在开始前首先需要注意三个关键要素&lt;/h2&gt;
+</content:encoded></item><item><title>Linux物理分区挂载</title><link>https://cyber-mobile.net/posts/linux%E7%89%A9%E7%90%86%E5%88%86%E5%8C%BA%E6%8C%82%E8%BD%BD/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/linux%E7%89%A9%E7%90%86%E5%88%86%E5%8C%BA%E6%8C%82%E8%BD%BD/</guid><pubDate>Tue, 18 Jun 2024 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;在开始前首先需要注意三个关键要素&lt;/h2&gt;
 &lt;ul&gt;
 &lt;li&gt;足够的物理存储空间&lt;/li&gt;
 &lt;li&gt;引导启动支持EFI模式&lt;/li&gt;
@@ -1424,7 +1424,7 @@ swapon /dev/sda2 # 全局挂载交换分区
 &lt;/code&gt;&lt;/pre&gt;
 &lt;h3&gt;到这一步，我们已经可以对物理存储进行操作&lt;/h3&gt;
 &lt;p&gt;以上为本篇文章的全部内容，感谢阅读&lt;/p&gt;
-</content:encoded></item><item><title>地址与归属地</title><link>https://pro1tocol.github.io/cyber-mobile/posts/%E5%9C%B0%E5%9D%80%E4%B8%8E%E5%BD%92%E5%B1%9E%E5%9C%B0/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/%E5%9C%B0%E5%9D%80%E4%B8%8E%E5%BD%92%E5%B1%9E%E5%9C%B0/</guid><pubDate>Fri, 14 Jun 2024 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;公网IP是唯一的，由于目前的IPv4网络环境的急剧恶化
+</content:encoded></item><item><title>地址与归属地</title><link>https://cyber-mobile.net/posts/%E5%9C%B0%E5%9D%80%E4%B8%8E%E5%BD%92%E5%B1%9E%E5%9C%B0/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/%E5%9C%B0%E5%9D%80%E4%B8%8E%E5%BD%92%E5%B1%9E%E5%9C%B0/</guid><pubDate>Fri, 14 Jun 2024 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;公网IP是唯一的，由于目前的IPv4网络环境的急剧恶化
 基于动态地址的套娃现象层出不穷&lt;/p&gt;
 &lt;h2&gt;如何确认你当前的IP地址？&lt;/h2&gt;
 &lt;p&gt;输入以下命令即可查询本地公网IP绝对地址&lt;/p&gt;
@@ -1439,7 +1439,7 @@ curl -L myip.ipip.net
 ipconfig /all  # Windows环境下详细查询内网地址
 ip addr        # Linux/Mac环境下查询网卡获取的当前内网地址
 &lt;/code&gt;&lt;/pre&gt;
-</content:encoded></item><item><title>UFW防火墙日常操作</title><link>https://pro1tocol.github.io/cyber-mobile/posts/ufw%E9%98%B2%E7%81%AB%E5%A2%99%E6%97%A5%E5%B8%B8%E6%93%8D%E4%BD%9C/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/ufw%E9%98%B2%E7%81%AB%E5%A2%99%E6%97%A5%E5%B8%B8%E6%93%8D%E4%BD%9C/</guid><pubDate>Sun, 02 Jun 2024 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;UFW是一款简单易用的防火墙工具，基于iptables&lt;/h2&gt;
+</content:encoded></item><item><title>UFW防火墙日常操作</title><link>https://cyber-mobile.net/posts/ufw%E9%98%B2%E7%81%AB%E5%A2%99%E6%97%A5%E5%B8%B8%E6%93%8D%E4%BD%9C/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/ufw%E9%98%B2%E7%81%AB%E5%A2%99%E6%97%A5%E5%B8%B8%E6%93%8D%E4%BD%9C/</guid><pubDate>Sun, 02 Jun 2024 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;UFW是一款简单易用的防火墙工具，基于iptables&lt;/h2&gt;
 &lt;p&gt;安装方面就不细说了，可以根据你的系统拉取不同的镜像源安装，我们从启动开始&lt;/p&gt;
 &lt;pre&gt;&lt;code&gt;sudo ufw enable # 启动防火墙
 systemctl status ufw # 使用该工具的可查看后台运行情况
@@ -1465,7 +1465,7 @@ sudo ufw status numbered # 查看规则编号
 sudo ufw delete &amp;lt;rule&amp;gt;
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;通过使用UFW命令设置出入流量规则，你可以更好地控制系统和服务器上的网络流量。合理配置防火墙规则可以有效地保护系统免受潜在的威胁和攻击。记住，确保定期审查和更新规则以适应你的安全需求。以上便是本章节全部内容，希望能帮助你学会使用UFW防火墙的日常命令设置出入流量规则，提高系统的安全性&lt;/p&gt;
-</content:encoded></item><item><title>MySQL数据库操作</title><link>https://pro1tocol.github.io/cyber-mobile/posts/mysql%E6%95%B0%E6%8D%AE%E5%BA%93%E6%93%8D%E4%BD%9C/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/mysql%E6%95%B0%E6%8D%AE%E5%BA%93%E6%93%8D%E4%BD%9C/</guid><pubDate>Tue, 28 May 2024 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;MySQL是一种广泛使用的关系型数据库管理系统，为了有效地管理和操作数据库，我们可以使用命令行界面来执行各种任务。本文将详细介绍如何使用命令行界面进行MySQL数据库的日常操作，包括手动检查数据流程、手动创建数据表、手动导入数据库、手动删除数据库和手动删除数据表&lt;/p&gt;
+</content:encoded></item><item><title>MySQL数据库操作</title><link>https://cyber-mobile.net/posts/mysql%E6%95%B0%E6%8D%AE%E5%BA%93%E6%93%8D%E4%BD%9C/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/mysql%E6%95%B0%E6%8D%AE%E5%BA%93%E6%93%8D%E4%BD%9C/</guid><pubDate>Tue, 28 May 2024 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;MySQL是一种广泛使用的关系型数据库管理系统，为了有效地管理和操作数据库，我们可以使用命令行界面来执行各种任务。本文将详细介绍如何使用命令行界面进行MySQL数据库的日常操作，包括手动检查数据流程、手动创建数据表、手动导入数据库、手动删除数据库和手动删除数据表&lt;/p&gt;
 &lt;h2&gt;首先，确认权限&lt;/h2&gt;
 &lt;h3&gt;一般的mysql数据库相关账户信息可以在.env文件里界定&lt;/h3&gt;
 &lt;h3&gt;手动检查数据流程&lt;/h3&gt;
@@ -1524,7 +1524,7 @@ mysql&amp;gt; SHOW TABLES; # 检查表是否成功删除
 &lt;/code&gt;&lt;/pre&gt;
 &lt;hr /&gt;
 &lt;p&gt;以上是本章节全部内容，通过手动检查数据流程，我们可以确认数据库、数据表和数据的存在和状态。手动创建数据表可以根据需求定义表结构。手动导入数据库允许我们将数据从外部文件导入数据库表中。手动删除数据库和数据表可以帮助我们清除数据或重新设计数据库结构。通过掌握这些命令，您可以更好地管理和操作MySQL数据库。&lt;/p&gt;
-</content:encoded></item><item><title>nmap与zenmap</title><link>https://pro1tocol.github.io/cyber-mobile/posts/nmap%E4%B8%8Ezenmap/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/nmap%E4%B8%8Ezenmap/</guid><pubDate>Sat, 25 May 2024 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;之前看视频有些up主和些博主，在查看局域网下已连接的设备有哪些，经常需要切换到路由器后台仪表台进行查看，在出现故障时进不去后台时还需要console接入查看，也不是说该方法不正确，而是在某些情况下，说实话，不够效率&lt;/p&gt;
+</content:encoded></item><item><title>nmap与zenmap</title><link>https://cyber-mobile.net/posts/nmap%E4%B8%8Ezenmap/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/nmap%E4%B8%8Ezenmap/</guid><pubDate>Sat, 25 May 2024 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;之前看视频有些up主和些博主，在查看局域网下已连接的设备有哪些，经常需要切换到路由器后台仪表台进行查看，在出现故障时进不去后台时还需要console接入查看，也不是说该方法不正确，而是在某些情况下，说实话，不够效率&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;假如你当前已经有了nmap工具，那么仅需一条命令&lt;/li&gt;
 &lt;/ul&gt;
@@ -1559,7 +1559,7 @@ mysql&amp;gt; SHOW TABLES; # 检查表是否成功删除
 &lt;h3&gt;Zenmap是Nmap的官方图形化用户界面（GUI），它提供了一个用户友好的界面来配置和运行Nmap扫描；Zenmap能够帮助用户更直观地使用Nmap工具，尤其适用于那些对命令行不太熟悉或更喜欢图形界面的用户&lt;/h3&gt;
 &lt;h3&gt;由于Zenmap是基于Nmap的GUI，因此Nmap工具和命令的原理、工作逻辑等方面并没有本质的差异。它们都依赖于Nmap的扫描技术和功能来进行网络探测、端口扫描、操作系统探测和服务版本探测等&lt;/h3&gt;
 &lt;p&gt;以上便是本篇文章的所有内容，感谢阅读&lt;/p&gt;
-</content:encoded></item><item><title>Debian本地镜像源搭建</title><link>https://pro1tocol.github.io/cyber-mobile/posts/debian%E6%9C%AC%E5%9C%B0%E9%95%9C%E5%83%8F%E6%BA%90/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/debian%E6%9C%AC%E5%9C%B0%E9%95%9C%E5%83%8F%E6%BA%90/</guid><pubDate>Sun, 19 May 2024 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;首先说一下为什么要弄这事？&lt;/h2&gt;
+</content:encoded></item><item><title>Debian本地镜像源搭建</title><link>https://cyber-mobile.net/posts/debian%E6%9C%AC%E5%9C%B0%E9%95%9C%E5%83%8F%E6%BA%90/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/debian%E6%9C%AC%E5%9C%B0%E9%95%9C%E5%83%8F%E6%BA%90/</guid><pubDate>Sun, 19 May 2024 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;首先说一下为什么要弄这事？&lt;/h2&gt;
 &lt;h3&gt;对于肉身在国内的朋友，Debian系的官方源镜像实在太慢，一般的系统更新只能依靠国内的源，如阿里源、腾讯源等厂商云，但如果你需要的是大规模部署，调用这些厂商源对公网上下行端口的负载是很大的，所以如果你只有一两台设备的更新需求，就没必要折腾这事了&lt;/h3&gt;
 &lt;h3&gt;部署一台用于同步的镜像软件源主机，只需要每日定时更新源主机的目录文件就好，内网的其他主机设备无需对外频繁通信，对内网某主机的安全性存在较高要求的，这种方式比较稳妥，另外更新流程只在内网状态下进行，那么就不必考虑出口带宽，同时避免许多公网上的流量监控，只需要考虑源主机软件包的安全性及GPG密钥的安全性即可&lt;/h3&gt;
 &lt;h3&gt;如果你是云服厂商，那么部署一台本地镜像软件源主机就很有必要了，毕竟用户每次租用设备一般都要先 &apos;apt update &amp;amp;&amp;amp; apt upgrade&apos; 极快的更新速度能够增强用户体验感，不像某些垃圾厂商只关注防火墙和策略组，当然这些也是必须的，可以做到虚拟主机的外层，而镜像软件源做在宿主机内层，层次化的安全策略更利于管理&lt;/h3&gt;
@@ -1618,7 +1618,7 @@ cat /var/log/cron.log
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;如何增强安全性及配置GPG密钥就不细说了，方法甚多建议查看: &lt;a href=&quot;https://mirrors.ustc.edu.cn/help/rsync-guide.html&quot;&gt;&lt;strong&gt;中科大源官方文档&lt;/strong&gt;&lt;/a&gt;&lt;/p&gt;
 &lt;p&gt;以上便是本篇全部内容，感谢阅读&lt;/p&gt;
-</content:encoded></item><item><title>搭建TLS加密线路</title><link>https://pro1tocol.github.io/cyber-mobile/posts/%E6%90%AD%E5%BB%BAtls%E5%8A%A0%E5%AF%86%E7%BA%BF%E8%B7%AF/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/%E6%90%AD%E5%BB%BAtls%E5%8A%A0%E5%AF%86%E7%BA%BF%E8%B7%AF/</guid><pubDate>Mon, 13 May 2024 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;开篇前还是那句老话：一款工具如何使用，是个人的意志决定的，工具本身没有好坏之分，请使用者自行斟酌&lt;/p&gt;
+</content:encoded></item><item><title>搭建TLS加密线路</title><link>https://cyber-mobile.net/posts/%E6%90%AD%E5%BB%BAtls%E5%8A%A0%E5%AF%86%E7%BA%BF%E8%B7%AF/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/%E6%90%AD%E5%BB%BAtls%E5%8A%A0%E5%AF%86%E7%BA%BF%E8%B7%AF/</guid><pubDate>Mon, 13 May 2024 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;开篇前还是那句老话：一款工具如何使用，是个人的意志决定的，工具本身没有好坏之分，请使用者自行斟酌&lt;/p&gt;
 &lt;h2&gt;声明： 本站不会承认该方案为原创&lt;/h2&gt;
 &lt;p&gt;本次搭建服务端使用的是带公网IP的VPS设备，当然原理都是相同，在内网或黑盒环境做也是没问题忽略掉第一步即可，别忘了网关服务器自行解析或者服务端内部直接IP定向；本次搭建使用docker容器进行，同时容器在使用过程中防第三方监听、渗透有奇效&lt;/p&gt;
 &lt;h3&gt;好，废话少说 现在开始&lt;/h3&gt;
@@ -1929,7 +1929,7 @@ load_module &apos;/usr/lib64/nginx/modules/ngx_stream_module.so&apos;; # centos�
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;将模组加入nginx.conf文件的头部即可，根据自己的系统二选一加入，不要无脑全复制
 以上便是本章节全部内容&lt;/p&gt;
-</content:encoded></item><item><title>云原生部署redis服务</title><link>https://pro1tocol.github.io/cyber-mobile/posts/%E4%BA%91%E5%8E%9F%E7%94%9F%E9%83%A8%E7%BD%B2redis%E6%9C%8D%E5%8A%A1/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/%E4%BA%91%E5%8E%9F%E7%94%9F%E9%83%A8%E7%BD%B2redis%E6%9C%8D%E5%8A%A1/</guid><pubDate>Sat, 20 Apr 2024 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;本文主要讲解云原生部署redis中间件的详细步骤&lt;/h2&gt;
+</content:encoded></item><item><title>云原生部署redis服务</title><link>https://cyber-mobile.net/posts/%E4%BA%91%E5%8E%9F%E7%94%9F%E9%83%A8%E7%BD%B2redis%E6%9C%8D%E5%8A%A1/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/%E4%BA%91%E5%8E%9F%E7%94%9F%E9%83%A8%E7%BD%B2redis%E6%9C%8D%E5%8A%A1/</guid><pubDate>Sat, 20 Apr 2024 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;本文主要讲解云原生部署redis中间件的详细步骤&lt;/h2&gt;
 &lt;h3&gt;部署环境&lt;/h3&gt;
 &lt;table&gt;
 &lt;thead&gt;
@@ -1974,7 +1974,7 @@ redis -v # 验证安装
 &lt;/code&gt;&lt;/pre&gt;
 &lt;h3&gt;以上为本篇文章的全部内容&lt;/h3&gt;
 &lt;h3&gt;感谢阅读&lt;/h3&gt;
-</content:encoded></item><item><title>Linux查找筛选改写</title><link>https://pro1tocol.github.io/cyber-mobile/posts/linux%E6%9F%A5%E6%89%BE%E7%AD%9B%E9%80%89%E6%94%B9%E5%86%99/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/linux%E6%9F%A5%E6%89%BE%E7%AD%9B%E9%80%89%E6%94%B9%E5%86%99/</guid><pubDate>Sat, 09 Mar 2024 00:00:00 GMT</pubDate><content:encoded>&lt;blockquote&gt;
+</content:encoded></item><item><title>Linux查找筛选改写</title><link>https://cyber-mobile.net/posts/linux%E6%9F%A5%E6%89%BE%E7%AD%9B%E9%80%89%E6%94%B9%E5%86%99/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/linux%E6%9F%A5%E6%89%BE%E7%AD%9B%E9%80%89%E6%94%B9%E5%86%99/</guid><pubDate>Sat, 09 Mar 2024 00:00:00 GMT</pubDate><content:encoded>&lt;blockquote&gt;
 &lt;p&gt;本期文章主要针对Linux环境下常用的运维技巧进行梳理&lt;/p&gt;
 &lt;/blockquote&gt;
 &lt;h3&gt;内容来源于网络，本文仅作整理，作用与否请自行测试&lt;/h3&gt;
@@ -2009,7 +2009,7 @@ sort -n -r 123.txt # 对文本内的数字进行逆向排序并打印
 &lt;/ul&gt;
 &lt;h3&gt;以上便是本章节全部内容&lt;/h3&gt;
 &lt;h3&gt;感谢阅读&lt;/h3&gt;
-</content:encoded></item><item><title>LXDM与Fluxbox</title><link>https://pro1tocol.github.io/cyber-mobile/posts/lxdm%E4%B8%8Efluxbox/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/lxdm%E4%B8%8Efluxbox/</guid><pubDate>Sat, 13 Jan 2024 00:00:00 GMT</pubDate><content:encoded>&lt;h3&gt;由于网络上这类的资料文档比较少，本篇文章仅做汇总&lt;/h3&gt;
+</content:encoded></item><item><title>LXDM与Fluxbox</title><link>https://cyber-mobile.net/posts/lxdm%E4%B8%8Efluxbox/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/lxdm%E4%B8%8Efluxbox/</guid><pubDate>Sat, 13 Jan 2024 00:00:00 GMT</pubDate><content:encoded>&lt;h3&gt;由于网络上这类的资料文档比较少，本篇文章仅做汇总&lt;/h3&gt;
 &lt;h2&gt;为什么使用这类冷门图形环境？&lt;/h2&gt;
 &lt;h3&gt;为了应用性能最大化&lt;/h3&gt;
 &lt;hr /&gt;
@@ -2118,7 +2118,7 @@ reboot
 &lt;h3&gt;如果使用完全修改配置文件的形式修改屏幕旋转会比较麻烦，同样是修改xorg.conf.d文件里的配置信息&lt;/h3&gt;
 &lt;h3&gt;方法请自行研究，就不再过多赘述&lt;/h3&gt;
 &lt;p&gt;以上为本章节全部内容，感谢阅读&lt;/p&gt;
-</content:encoded></item><item><title>DebianCli汉化</title><link>https://pro1tocol.github.io/cyber-mobile/posts/debiancli%E6%B1%89%E5%8C%96/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/debiancli%E6%B1%89%E5%8C%96/</guid><pubDate>Fri, 16 Jun 2023 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;这篇文章主要针对的是远程连接(ssh/telnet)状态下的汉化&lt;/h2&gt;
+</content:encoded></item><item><title>DebianCli汉化</title><link>https://cyber-mobile.net/posts/debiancli%E6%B1%89%E5%8C%96/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/debiancli%E6%B1%89%E5%8C%96/</guid><pubDate>Fri, 16 Jun 2023 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;这篇文章主要针对的是远程连接(ssh/telnet)状态下的汉化&lt;/h2&gt;
 &lt;h3&gt;不是你直连显示器，或者在本地(noVNC)看到的样子，不要弄混了不然会乱码&lt;/h3&gt;
 &lt;p&gt;另外在你用于建立连接的图形化终端首先得保证具备了utf-8编码的中文
 当然，如果你是用XShell或者Finalshell这类的第三方工具，那可以不用看了&lt;/p&gt;
@@ -2148,7 +2148,7 @@ reboot
 &lt;h3&gt;这样汉化并不是全局汉化，只是SHELL部分优先中文显示，但也相对省事&lt;/h3&gt;
 &lt;p&gt;也有些人会说并不用安装字体，也能生效
 但如果后续要部署gnome或者KDE等这类图形化界面，安装字体会让你更舒服&lt;/p&gt;
-</content:encoded></item><item><title>Docker代理配置</title><link>https://pro1tocol.github.io/cyber-mobile/posts/docker%E4%BB%A3%E7%90%86%E9%85%8D%E7%BD%AE/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/docker%E4%BB%A3%E7%90%86%E9%85%8D%E7%BD%AE/</guid><pubDate>Mon, 12 Jun 2023 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;由于环境恶劣，在构建容器时会出现Pull失败
+</content:encoded></item><item><title>Docker代理配置</title><link>https://cyber-mobile.net/posts/docker%E4%BB%A3%E7%90%86%E9%85%8D%E7%BD%AE/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/docker%E4%BB%A3%E7%90%86%E9%85%8D%E7%BD%AE/</guid><pubDate>Mon, 12 Jun 2023 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;由于环境恶劣，在构建容器时会出现Pull失败
 你需要代理，需要代理，需要代理&lt;/p&gt;
 &lt;h2&gt;怎么做？&lt;/h2&gt;
 &lt;p&gt;创建代理配置文件&lt;/p&gt;
@@ -2165,7 +2165,7 @@ Environment=&quot;NO_PROXY=localhost,127.0.0.1,.example.com&quot;
 systemctl restart docker.service
 &lt;/code&gt;&lt;/pre&gt;
 &lt;h2&gt;感谢阅读&lt;/h2&gt;
-</content:encoded></item><item><title>Shell环境调优</title><link>https://pro1tocol.github.io/cyber-mobile/posts/shell%E7%8E%AF%E5%A2%83%E8%B0%83%E4%BC%98/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/shell%E7%8E%AF%E5%A2%83%E8%B0%83%E4%BC%98/</guid><pubDate>Tue, 16 May 2023 00:00:00 GMT</pubDate><content:encoded>&lt;h1&gt;本文主要适用于美化自定义 Shell 环境&lt;/h1&gt;
+</content:encoded></item><item><title>Shell环境调优</title><link>https://cyber-mobile.net/posts/shell%E7%8E%AF%E5%A2%83%E8%B0%83%E4%BC%98/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/shell%E7%8E%AF%E5%A2%83%E8%B0%83%E4%BC%98/</guid><pubDate>Tue, 16 May 2023 00:00:00 GMT</pubDate><content:encoded>&lt;h1&gt;本文主要适用于美化自定义 Shell 环境&lt;/h1&gt;
 &lt;hr /&gt;
 &lt;h2&gt;&lt;code&gt;BASH&lt;/code&gt; 根据第三方工具环境优化&lt;/h2&gt;
 &lt;h3&gt;切换环境变量&lt;/h3&gt;
@@ -2234,7 +2234,7 @@ systemctl restart docker.service
     sudo chmod +x /usr/local/bin/ccat
 
 &lt;/code&gt;&lt;/pre&gt;
-</content:encoded></item><item><title>Linux系统常用命令</title><link>https://pro1tocol.github.io/cyber-mobile/posts/linux%E5%B8%B8%E7%94%A8%E5%91%BD%E4%BB%A4/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/linux%E5%B8%B8%E7%94%A8%E5%91%BD%E4%BB%A4/</guid><pubDate>Fri, 14 Apr 2023 00:00:00 GMT</pubDate><content:encoded>&lt;h1&gt;本文主要介绍linux系统的日常操作命令&lt;/h1&gt;
+</content:encoded></item><item><title>Linux系统常用命令</title><link>https://cyber-mobile.net/posts/linux%E5%B8%B8%E7%94%A8%E5%91%BD%E4%BB%A4/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/linux%E5%B8%B8%E7%94%A8%E5%91%BD%E4%BB%A4/</guid><pubDate>Fri, 14 Apr 2023 00:00:00 GMT</pubDate><content:encoded>&lt;h1&gt;本文主要介绍linux系统的日常操作命令&lt;/h1&gt;
 &lt;hr /&gt;
 &lt;h2&gt;基础命令&lt;/h2&gt;
 &lt;h3&gt;文件及指令操作&lt;/h3&gt;
@@ -2840,7 +2840,7 @@ systemctl restart docker.service
         [wallpapers] (/usr/share/fluxbox/backgrounds) {feh --bg-scale}
     [end]
 &lt;/code&gt;&lt;/pre&gt;
-</content:encoded></item><item><title>Armbian部署</title><link>https://pro1tocol.github.io/cyber-mobile/posts/armbian%E9%83%A8%E7%BD%B2/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/armbian%E9%83%A8%E7%BD%B2/</guid><pubDate>Fri, 07 Apr 2023 00:00:00 GMT</pubDate><content:encoded>&lt;h1&gt;本文主要介绍Armian系统的安装和部署&lt;/h1&gt;
+</content:encoded></item><item><title>Armbian部署</title><link>https://cyber-mobile.net/posts/armbian%E9%83%A8%E7%BD%B2/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/armbian%E9%83%A8%E7%BD%B2/</guid><pubDate>Fri, 07 Apr 2023 00:00:00 GMT</pubDate><content:encoded>&lt;h1&gt;本文主要介绍Armian系统的安装和部署&lt;/h1&gt;
 &lt;hr /&gt;
 &lt;h3&gt;系统的安装没有图形化界面，安装过程高度定制化，可以根据您的喜好进行安排&lt;/h3&gt;
 &lt;p&gt;系统详细信息查看&lt;a href=&quot;https://github.com/ophub/amlogic-s9xxx-armbian&quot;&gt;https://github.com/ophub/amlogic-s9xxx-armbian&lt;/a&gt;&lt;/p&gt;
@@ -2875,7 +2875,7 @@ gateway 192.168.1.1
 &lt;pre&gt;&lt;code&gt;pkexec chown root:root /etc/sudo.conf -R
 mandb -csp
 &lt;/code&gt;&lt;/pre&gt;
-</content:encoded></item><item><title>Archlinux部署</title><link>https://pro1tocol.github.io/cyber-mobile/posts/archlinux%E9%83%A8%E7%BD%B2/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/archlinux%E9%83%A8%E7%BD%B2/</guid><pubDate>Thu, 06 Apr 2023 00:00:00 GMT</pubDate><content:encoded>&lt;blockquote&gt;
+</content:encoded></item><item><title>Archlinux部署</title><link>https://cyber-mobile.net/posts/archlinux%E9%83%A8%E7%BD%B2/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/archlinux%E9%83%A8%E7%BD%B2/</guid><pubDate>Thu, 06 Apr 2023 00:00:00 GMT</pubDate><content:encoded>&lt;blockquote&gt;
 &lt;p&gt;本文主要介绍Archlinux系统的安装和部署&lt;/p&gt;
 &lt;/blockquote&gt;
 &lt;hr /&gt;
@@ -3091,7 +3091,7 @@ systemctl enable gdm
 # 重启系统生效
 reboot
 &lt;/code&gt;&lt;/pre&gt;
-</content:encoded></item><item><title>Gnome环境优化</title><link>https://pro1tocol.github.io/cyber-mobile/posts/gnome%E7%8E%AF%E5%A2%83%E4%BC%98%E5%8C%96/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/gnome%E7%8E%AF%E5%A2%83%E4%BC%98%E5%8C%96/</guid><pubDate>Tue, 04 Apr 2023 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;本文主要对Gnome桌面环境日常使用部分优化&lt;/h2&gt;
+</content:encoded></item><item><title>Gnome环境优化</title><link>https://cyber-mobile.net/posts/gnome%E7%8E%AF%E5%A2%83%E4%BC%98%E5%8C%96/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/gnome%E7%8E%AF%E5%A2%83%E4%BC%98%E5%8C%96/</guid><pubDate>Tue, 04 Apr 2023 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;本文主要对Gnome桌面环境日常使用部分优化&lt;/h2&gt;
 &lt;h3&gt;关闭显示屏的触摸功能&lt;/h3&gt;
 &lt;pre&gt;&lt;code&gt;    apt purge --remove iio-sensor-proxy -y
 
@@ -3255,7 +3255,7 @@ GNOME Settings - &amp;gt; Keyboard -&amp;gt; Customize shortcuts
 &lt;pre&gt;&lt;code&gt;gnome-shell-extension-manager  # 安装工具
 caribou 36                     # 安装插件并启用
 &lt;/code&gt;&lt;/pre&gt;
-</content:encoded></item><item><title>离线K8s_2)插件管理</title><link>https://pro1tocol.github.io/cyber-mobile/posts/%E7%A6%BB%E7%BA%BFk8s_2%E6%8F%92%E4%BB%B6%E7%AE%A1%E7%90%86/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/%E7%A6%BB%E7%BA%BFk8s_2%E6%8F%92%E4%BB%B6%E7%AE%A1%E7%90%86/</guid><pubDate>Tue, 04 Apr 2023 00:00:00 GMT</pubDate><content:encoded>&lt;h3&gt;本文主要针对控制平台各项必备插件进行部署管理&lt;/h3&gt;
+</content:encoded></item><item><title>离线K8s_2)插件管理</title><link>https://cyber-mobile.net/posts/%E7%A6%BB%E7%BA%BFk8s_2%E6%8F%92%E4%BB%B6%E7%AE%A1%E7%90%86/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/%E7%A6%BB%E7%BA%BFk8s_2%E6%8F%92%E4%BB%B6%E7%AE%A1%E7%90%86/</guid><pubDate>Tue, 04 Apr 2023 00:00:00 GMT</pubDate><content:encoded>&lt;h3&gt;本文主要针对控制平台各项必备插件进行部署管理&lt;/h3&gt;
 &lt;hr /&gt;
 &lt;h3&gt;如果之前部署操作存在错误，可以清空集群配置重新部署&lt;/h3&gt;
 &lt;pre&gt;&lt;code&gt;# 在每个节点上清空所有配置
@@ -3335,7 +3335,7 @@ watch -n 1 -c &quot;kubectl get all -n kubernetes-dashboard &amp;amp;&amp;amp; k
 &lt;h3&gt;浏览器输入 https://[master1_ip]:[port] 即可访问前端管理页面&lt;/h3&gt;
 &lt;h3&gt;至此，必备插件搭建完毕，如后期还有组件如crictl、helm等工具再另写文章&lt;/h3&gt;
 &lt;h3&gt;以上便是本章节全部内容，感谢阅读&lt;/h3&gt;
-</content:encoded></item><item><title>离线K8s_1)安装工具</title><link>https://pro1tocol.github.io/cyber-mobile/posts/%E7%A6%BB%E7%BA%BFk8s_1%E5%AE%89%E8%A3%85%E5%B7%A5%E5%85%B7/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/%E7%A6%BB%E7%BA%BFk8s_1%E5%AE%89%E8%A3%85%E5%B7%A5%E5%85%B7/</guid><pubDate>Tue, 04 Apr 2023 00:00:00 GMT</pubDate><content:encoded>&lt;h3&gt;本文主要针对离线部署的相关工具进行构建汇总安装&lt;/h3&gt;
+</content:encoded></item><item><title>离线K8s_1)安装工具</title><link>https://cyber-mobile.net/posts/%E7%A6%BB%E7%BA%BFk8s_1%E5%AE%89%E8%A3%85%E5%B7%A5%E5%85%B7/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/%E7%A6%BB%E7%BA%BFk8s_1%E5%AE%89%E8%A3%85%E5%B7%A5%E5%85%B7/</guid><pubDate>Tue, 04 Apr 2023 00:00:00 GMT</pubDate><content:encoded>&lt;h3&gt;本文主要针对离线部署的相关工具进行构建汇总安装&lt;/h3&gt;
 &lt;hr /&gt;
 &lt;h3&gt;建议开始前先准备一台能够链接互联网的系统作为测试环境&lt;/h3&gt;
 &lt;h3&gt;&lt;code&gt;测试环境&lt;/code&gt; 对工具进行下载、构建&lt;/h3&gt;
@@ -3426,7 +3426,7 @@ docker tag [IMAGE ID] registry.aliyuncs.com/google_containers/pause:3.9
 &lt;hr /&gt;
 &lt;h3&gt;进行到此没有出现报错，工具的安装与控制平面镜像的部署算是完成了&lt;/h3&gt;
 &lt;h3&gt;接下来，我们需要对集群的部署进行操作&lt;/h3&gt;
-</content:encoded></item><item><title>离线K8s_4)集群部署</title><link>https://pro1tocol.github.io/cyber-mobile/posts/%E7%A6%BB%E7%BA%BFk8s_4%E9%9B%86%E7%BE%A4%E9%83%A8%E7%BD%B2/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/%E7%A6%BB%E7%BA%BFk8s_4%E9%9B%86%E7%BE%A4%E9%83%A8%E7%BD%B2/</guid><pubDate>Tue, 04 Apr 2023 00:00:00 GMT</pubDate><content:encoded>&lt;h3&gt;本文主要针对集群部署进行解析&lt;/h3&gt;
+</content:encoded></item><item><title>离线K8s_4)集群部署</title><link>https://cyber-mobile.net/posts/%E7%A6%BB%E7%BA%BFk8s_4%E9%9B%86%E7%BE%A4%E9%83%A8%E7%BD%B2/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/%E7%A6%BB%E7%BA%BFk8s_4%E9%9B%86%E7%BE%A4%E9%83%A8%E7%BD%B2/</guid><pubDate>Tue, 04 Apr 2023 00:00:00 GMT</pubDate><content:encoded>&lt;h3&gt;本文主要针对集群部署进行解析&lt;/h3&gt;
 &lt;hr /&gt;
 &lt;h3&gt;集群的部署大致来看分为两种：&lt;/h3&gt;
 &lt;h3&gt;①单Master核心节点+多Workers工作节点&lt;/h3&gt;
@@ -3665,7 +3665,7 @@ cp /etc/kubernetes/kubelet.conf ~/.kube/config
 &lt;/code&gt;&lt;/pre&gt;
 &lt;hr /&gt;
 &lt;h3&gt;以上便是本章节全部内容&lt;/h3&gt;
-</content:encoded></item><item><title>离线K8s_3)环境调优</title><link>https://pro1tocol.github.io/cyber-mobile/posts/%E7%A6%BB%E7%BA%BFk8s_3%E7%8E%AF%E5%A2%83%E8%B0%83%E4%BC%98/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/%E7%A6%BB%E7%BA%BFk8s_3%E7%8E%AF%E5%A2%83%E8%B0%83%E4%BC%98/</guid><pubDate>Tue, 04 Apr 2023 00:00:00 GMT</pubDate><content:encoded>&lt;h3&gt;本文主要针对CentOS7环境部署K8s所需的前置操作进行汇总&lt;/h3&gt;
+</content:encoded></item><item><title>离线K8s_3)环境调优</title><link>https://cyber-mobile.net/posts/%E7%A6%BB%E7%BA%BFk8s_3%E7%8E%AF%E5%A2%83%E8%B0%83%E4%BC%98/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/%E7%A6%BB%E7%BA%BFk8s_3%E7%8E%AF%E5%A2%83%E8%B0%83%E4%BC%98/</guid><pubDate>Tue, 04 Apr 2023 00:00:00 GMT</pubDate><content:encoded>&lt;h3&gt;本文主要针对CentOS7环境部署K8s所需的前置操作进行汇总&lt;/h3&gt;
 &lt;hr /&gt;
 &lt;h3&gt;配置本地解析器&lt;/h3&gt;
 &lt;pre&gt;&lt;code&gt;nano /etc/hosts     # 修改解析器配置文件
@@ -3839,7 +3839,7 @@ yum makecache &amp;amp;&amp;amp; yum update -y
 &lt;hr /&gt;
 &lt;h3&gt;注意：如果是完全离线的状态，镜像源改不改无所谓&lt;/h3&gt;
 &lt;h3&gt;以上便是本章节全部内容&lt;/h3&gt;
-</content:encoded></item><item><title>Linux通用网络配置</title><link>https://pro1tocol.github.io/cyber-mobile/posts/linux%E9%80%9A%E7%94%A8%E7%BD%91%E7%BB%9C%E9%85%8D%E7%BD%AE/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/linux%E9%80%9A%E7%94%A8%E7%BD%91%E7%BB%9C%E9%85%8D%E7%BD%AE/</guid><pubDate>Fri, 17 Jun 2022 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;本篇主要针对ifup-down、networkmanager、netplan网络工具进行配置&lt;/h2&gt;
+</content:encoded></item><item><title>Linux通用网络配置</title><link>https://cyber-mobile.net/posts/linux%E9%80%9A%E7%94%A8%E7%BD%91%E7%BB%9C%E9%85%8D%E7%BD%AE/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/linux%E9%80%9A%E7%94%A8%E7%BD%91%E7%BB%9C%E9%85%8D%E7%BD%AE/</guid><pubDate>Fri, 17 Jun 2022 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;本篇主要针对ifup-down、networkmanager、netplan网络工具进行配置&lt;/h2&gt;
 &lt;h3&gt;这3种网络管理守护进程是Linux系统下常用的进程间互斥同步&lt;/h3&gt;
 &lt;p&gt;所以在系统管理网络链路的过程中遇到问题
 必须优先检查是否存在进程冲突&lt;/p&gt;
@@ -3922,7 +3922,7 @@ reboot
 &lt;/code&gt;&lt;/pre&gt;
 &lt;h3&gt;以上便是本篇全部内容&lt;/h3&gt;
 &lt;p&gt;感谢阅读&lt;/p&gt;
-</content:encoded></item><item><title>PVE节点local扩容</title><link>https://pro1tocol.github.io/cyber-mobile/posts/pve%E8%8A%82%E7%82%B9local%E6%89%A9%E5%AE%B9/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/pve%E8%8A%82%E7%82%B9local%E6%89%A9%E5%AE%B9/</guid><pubDate>Sat, 26 Jun 2021 00:00:00 GMT</pubDate><content:encoded>&lt;ul&gt;
+</content:encoded></item><item><title>PVE节点local扩容</title><link>https://cyber-mobile.net/posts/pve%E8%8A%82%E7%82%B9local%E6%89%A9%E5%AE%B9/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/pve%E8%8A%82%E7%82%B9local%E6%89%A9%E5%AE%B9/</guid><pubDate>Sat, 26 Jun 2021 00:00:00 GMT</pubDate><content:encoded>&lt;ul&gt;
 &lt;li&gt;在组建集群根服务器时，节点常常使用独立的存储空间，与其他虚拟机或容器相对独立；
 那么在初始化时整合节点空间，需要在web仪表台与后端命令行界面同步操作&lt;/li&gt;
 &lt;/ul&gt;
@@ -3940,7 +3940,7 @@ resize2fs /dev/mapper/pve-root # 校对服务器存储表项
 &lt;/code&gt;&lt;/pre&gt;
 &lt;h3&gt;完成这一步无报错，则完成整合&lt;/h3&gt;
 &lt;p&gt;感谢阅读&lt;/p&gt;
-</content:encoded></item><item><title>PVE部署DHCP服务</title><link>https://pro1tocol.github.io/cyber-mobile/posts/pve%E9%83%A8%E7%BD%B2dhcp%E6%9C%8D%E5%8A%A1/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/pve%E9%83%A8%E7%BD%B2dhcp%E6%9C%8D%E5%8A%A1/</guid><pubDate>Sat, 26 Jun 2021 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;开始之前，需要声明&lt;/h2&gt;
+</content:encoded></item><item><title>PVE部署DHCP服务</title><link>https://cyber-mobile.net/posts/pve%E9%83%A8%E7%BD%B2dhcp%E6%9C%8D%E5%8A%A1/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/pve%E9%83%A8%E7%BD%B2dhcp%E6%9C%8D%E5%8A%A1/</guid><pubDate>Sat, 26 Jun 2021 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;开始之前，需要声明&lt;/h2&gt;
 &lt;ul&gt;
 &lt;li&gt;该方案使用dnsmasq工具部署，其原理通用于物理&lt;/li&gt;
 &lt;li&gt;部署过程仅含网关路由转发与实现dhcp功能，不含防火墙规则设置DMZ规则及出入站流量控制请自行配置&lt;/li&gt;
@@ -3998,7 +3998,7 @@ n1: name=eth1,bridge=eth1,gw=192.168.1.15,hwaddr=56:DB:76:52:9F:56,ip=10.0.0.1/2
 &lt;p&gt;到这基本上已完成配置部署，此时容器为网关及dhcp服务器，宿主机及后面新建的所有容器虚拟机仅需以桥接模式使用eth1
 网络设置会自动分配内网地址，外部出入口流量会全部由该容器处理，所以对容器的负载均衡需要提前考虑&lt;/p&gt;
 &lt;p&gt;感谢阅读&lt;/p&gt;
-</content:encoded></item><item><title>PVE硬件直通</title><link>https://pro1tocol.github.io/cyber-mobile/posts/pve%E7%A1%AC%E4%BB%B6%E7%9B%B4%E9%80%9A/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/pve%E7%A1%AC%E4%BB%B6%E7%9B%B4%E9%80%9A/</guid><pubDate>Wed, 16 Jun 2021 00:00:00 GMT</pubDate><content:encoded>&lt;ul&gt;
+</content:encoded></item><item><title>PVE硬件直通</title><link>https://cyber-mobile.net/posts/pve%E7%A1%AC%E4%BB%B6%E7%9B%B4%E9%80%9A/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/pve%E7%A1%AC%E4%BB%B6%E7%9B%B4%E9%80%9A/</guid><pubDate>Wed, 16 Jun 2021 00:00:00 GMT</pubDate><content:encoded>&lt;ul&gt;
 &lt;li&gt;注意: 该方案仅作用于虚拟机，对LXC容器无效
 硬件直通是老生常谈的事情，你在开始前要先搞明白自己的主板芯片组是怎么分布的，以及南桥与北桥的情况；如果你的需求仅仅是直通网卡、声卡、硬盘等PCI-e设备，要求没那么高，那成功率还是很高的；如果你的需求是直通核显、独显，那么你需要更多的去参考同类型的主板，找同类型的方案，成功率才会有所提高&lt;/li&gt;
 &lt;/ul&gt;
@@ -4036,7 +4036,7 @@ blacklist i915
 &lt;/code&gt;&lt;/pre&gt;
 &lt;h3&gt;如果是直通显卡的，还需要将显卡的编号加入vfio模组&lt;/h3&gt;
 &lt;p&gt;感谢阅读&lt;/p&gt;
-</content:encoded></item><item><title>PVE容器LXC嵌套</title><link>https://pro1tocol.github.io/cyber-mobile/posts/pve%E5%AE%B9%E5%99%A8lxc%E5%B5%8C%E5%A5%97/</link><guid isPermaLink="true">https://pro1tocol.github.io/cyber-mobile/posts/pve%E5%AE%B9%E5%99%A8lxc%E5%B5%8C%E5%A5%97/</guid><pubDate>Mon, 14 Jun 2021 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;从功耗比上看，lxc容器与PVE环境更匹配&lt;/p&gt;
+</content:encoded></item><item><title>PVE容器LXC嵌套</title><link>https://cyber-mobile.net/posts/pve%E5%AE%B9%E5%99%A8lxc%E5%B5%8C%E5%A5%97/</link><guid isPermaLink="true">https://cyber-mobile.net/posts/pve%E5%AE%B9%E5%99%A8lxc%E5%B5%8C%E5%A5%97/</guid><pubDate>Mon, 14 Jun 2021 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;从功耗比上看，lxc容器与PVE环境更匹配&lt;/p&gt;
 &lt;h2&gt;2步开启宿主机多层嵌套&lt;/h2&gt;
 &lt;ul&gt;
 &lt;li&gt;首先在CT模板关闭状态下，不要勾选 &lt;code&gt;无特权容器&lt;/code&gt; 并且在 &lt;code&gt;选项&lt;/code&gt; → 功能勾选 &lt;code&gt;嵌套&lt;/code&gt;&lt;/li&gt;
