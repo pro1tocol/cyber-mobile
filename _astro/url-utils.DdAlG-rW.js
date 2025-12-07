@@ -1,0 +1,1 @@
+import"./zh_TW.DW2Wm2M3.js";function u(o,e){const n=o.replace(/^\/|\/$/g,"").toLowerCase(),r=e.replace(/^\/|\/$/g,"").toLowerCase();return n===r}function t(...o){return o.join("/").replace(/\/+/g,"/")}function i(o){return a(`/posts/${o}/`)}function a(o){return t("","/my-repo/",o)}export{i as g,u as p,a as u};
