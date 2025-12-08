@@ -1,0 +1,68 @@
+---
+title: 压缩工具TAR
+published: 2025-03-09
+description: ""
+tags: ["Debian", "操作"]
+category: 工具
+draft: false
+---
+
+> 本文主要对压缩工具tar的日常使用方法进行梳理
+> 
+
+### 相关参考资料来源于网络，请读者自行测试
+
+### 操作分类说明
+
+- 先梳理文件数据结构(工作目录)
+
+| tar操作命令 | tar操作说明 |
+| --- | --- |
+| -c | 创建归档文件 |
+| -z | 使用zip格式对文件进行压缩 |
+| -j | 使用bzip2格式对文件进行压缩 |
+| -J | 使用xz格式对文件进行压缩 |
+| -v | 操作过程显示详细信息 |
+| -f | 定义归档压缩的文件名 |
+
+### 操作分类概述
+
+- 标准为tar格式文件的压缩与解压
+
+```bash
+tar -cvf attach.tar /attach/1.txt /attach/2.txt # 用于将attach文件夹内的2个文件打包至.tar压缩包
+tar -cvf attach.tar /attach/ # 用于打包attach文件夹内所有文件至.tar压缩包
+tar -tf attach.tar # 用于查看当前目录下.tar压缩包的内容
+tar -xvf attach.tar # 解压.tar压缩包至当前目录，此时会释放attach/文件夹
+```
+
+- 标准为tar.gz格式文件的压缩与解压
+
+```bash
+tar -czvf attach.tar.gz /attach/1.txt /attach/2.txt # 用于将attach文件夹内的2个文件打包至.tar.gz压缩包
+tar -czvf attach.tar.gz /attach/ # 用于打包attach文件夹内所有文件至.tar.gz压缩包
+tar -tf attach.tar.gz # 用于查看当前目录下.tar.gz压缩包的内容
+tar -xzvf attach.tar.gz # 解压.tar.gz压缩包至当前目录，此时会释放attach/文件夹
+```
+
+- 标准为tar.bz2格式文件的压缩与解压
+
+```bash
+tar -cjvf attach.tar.bz2 /attach/1.txt /attach/2.txt # 用于将attach文件夹内的2个文件打包至.tar.bz2压缩包
+tar -cjvf attach.tar.bz2 /attach/ # 用于打包attach文件夹内所有文件至.tar.bz2压缩包
+tar -tf attach.tar.bz2 # 用于查看当前目录下.tar.bz2压缩包的内容
+tar -xjvf attach.tar.bz2 # 解压.tar.bz2压缩包至当前目录，此时会释放attach/文件夹
+```
+
+- 标准为tar.xz格式文件的压缩与解压
+
+```bash
+tar -cJvf attach.tar.xz /attach/1.txt /attach/2.txt # 用于将attach文件夹内的2个文件打包至.tar.xz压缩包
+tar -cJvf attach.tar.xz /attach/ # 用于打包attach文件夹内所有文件至.tar.xz压缩包
+tar -tf attach.tar.xz # 用于查看当前目录下.tar.xz压缩包的内容
+tar -xJvf attach.tar.xz # 解压.tar.xz压缩包至当前目录，此时会释放attach/文件夹
+```
+
+### 以上便是本章节全部内容
+
+### 感谢阅读

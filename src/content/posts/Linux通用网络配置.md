@@ -1,0 +1,116 @@
+---
+title: Linux通用网络配置
+published: 2022-06-17
+description: ""
+tags: ["Linux", "操作"]
+category: 记录
+draft: false
+---
+
+## 本篇主要针对ifup-down、networkmanager、netplan网络工具进行配置
+
+### 这3种网络管理守护进程是Linux系统下常用的进程间互斥同步
+
+所以在系统管理网络链路的过程中遇到问题
+必须优先检查是否存在进程冲突
+
+## 就每个工具的相关网络配置进行解析
+
+### systemd-networkd
+
+一般的systemd-networkd与systemd-resolved两个进程必须同时存在，对网络管理才会生效，常见于Archlinux与其他linux发行版标准配置中,具体可了解[Wiki](https://wiki.archlinuxcn.org/wiki/Systemd-networkd) ，上干货
+
+```bash
+# 进入配置文件目录
+cd /etc/systemd/network
+# 应该会有个名为 `xx.network` 文件
+ls -l
+sudo vim xx.network
+# 配置DHCP方法
+   [Match]
+   Name=eth0
+   [Network]
+   DHCP=ipv4
+# 配置STATIC方法
+    [Match]
+   Name=eth0
+   [Network]
+   Address=192.168.1.2/24
+   Gateway=192.168.1.1
+   DNS=8.8.8.8
+   DNS=8.8.4.4
+# 其中 `eth0` 为网卡设备，配置静态地址时可同时指定网关及域名解析服务器地址
+# 以下命令生效及查看运行情况
+systemctl restart systemd-networkd
+systemctl status systemd-networkd
+```
+
+重启服务的命令我就不写了，毕竟这工具有许多版本大同小异，不如重启系统来的快，另外在配置静态地址时，需要有一定的网络管理基础储备，最起码要了解局域网、网关、子网掩码间的关系
+
+### netplan
+
+一般的netplan最常见工作于ubuntu服务器发行版中，详细可见[简介](https://netplan.io/)
+进程作用于内核网管之上，下面是干货
+
+```bash
+cd /etc/netplan
+# 编辑配置文件(文件名根据实际情况做修改)
+sudo vim xxx.yaml
+# 配置DHCP方法
+network:
+      version: 2
+          ethernets:
+              eth0:
+                  dhcp4: yes
+# 配置静态地址方法（含DNS）
+  network:
+      version: 2
+          ethernets:
+              eth0:
+                  dhcp4: no
+                      addresses: [192.168.1.2/24]
+                      gateway4: 192.168.1.1
+                  nameservers:
+                      addresses: [223.5.5.5, 8.8.4.4]
+```
+
+加载配置信息并生效
+
+```bash
+sudo netplan apply
+```
+
+### networkmanager
+
+一般的networkmanager可以配置无线或者有线网络，更偏向于有线网络，常见于多种linux发行版与图形化界面的网络管理
+具体可了解[Wiki](https://wiki.archlinuxcn.org/wiki/NetworkManager)，上干货
+
+```bash
+# 进入配置文件目录
+cd /etc/network
+# 输入命令查看设备网卡信息(如未出现请检查驱动或IO设备是否挂载)
+ip a
+ifconfig
+# 编辑配置文件
+sudo vim interfaces
+# 配置动态地址(静态则取消注释，并将dhcp个更换为static)
+auto eth0
+   iface eth0 inet dhcp   #static
+        #address 192.168.1.2/24
+        #gateway 192.168.1.1
+```
+
+建议在配置静态地址时，同步配置DNS服务器地址
+
+```bash
+sudo vim /etc/resolv.conf
+# 配置以下为依据实际情况自定义内容
+nameserver 223.5.5.5
+nameserver 8.8.4.4
+# 重启系统或重启服务生效
+reboot
+```
+
+### 以上便是本篇全部内容
+
+感谢阅读

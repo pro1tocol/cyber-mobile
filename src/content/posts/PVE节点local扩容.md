@@ -1,0 +1,37 @@
+---
+title: PVE节点local扩容
+published: 2021-06-26
+description: ""
+tags: ["ProxmoxVE", "操作"]
+category: 记录
+draft: false
+---
+
+- 在组建集群根服务器时，节点常常使用独立的存储空间，与其他虚拟机或容器相对独立；
+那么在初始化时整合节点空间，需要在web仪表台与后端命令行界面同步操作
+
+## 以下为操作步骤
+
+### 仪表台部分
+
+进入 `节点` -> `存储` -> 找到 `local-lvm` -> `移除`
+
+此时已分配的空间仅仅在表项中移除，物理空间并未整合
+
+### 切换到命令行界面
+
+```bash
+ls -l /dev/pve/data # 查找指定目录是否存在
+```
+
+### 找到则进行下一步
+
+```bash
+lvremove /dev/pve/data # 移除物理空间
+lvresize -l +100%FREE /dev/pve/root # 将空闲空间整合进入节点
+resize2fs /dev/mapper/pve-root # 校对服务器存储表项
+```
+
+### 完成这一步无报错，则完成整合
+
+感谢阅读

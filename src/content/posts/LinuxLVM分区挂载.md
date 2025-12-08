@@ -1,0 +1,81 @@
+---
+title: Linux_LVM分区挂载
+published: 2024-06-18
+description: ""
+tags: ["Linux", "操作"]
+category: 记录
+draft: false
+---
+
+## 对于分区的设置为LVM的格式就不再过多赘述了
+
+不是很明白LVM格式的可自行查阅相关资料
+
+- 开始前需要查看磁盘状态
+
+```bash
+fdisk -l
+df -h
+# 列出磁盘上的当前分区信息
+```
+
+### 创建对应的分区表
+
+```bash
+# 假设物理磁盘为 /dev/sda
+parted /dev/sda # 使用parted工具对物理磁盘进行分区作业
+mklabel gpt # 在磁盘上创建一个新的 GPT（GUID 分区表）标签
+mkpart ESP 2048s 513M # 创建一个名为 ESP 的分区，从扇区 2048 开始，大小为 513MB
+mkpart primary 513M -1 # 创建一个主分区为 primary 的分区，从 513MB 处开始，直到磁盘的末尾用于存储操作系统和其他数据
+set 1 boot on # 设置第一个分区（即 ESP 分区）为引导分区，以便系统可以从中引导
+```
+
+### 写入保存退出后，此时分区表中会出现 /dev/sda1 与 /dev/sda2 两个分区
+
+/dev/sda1 分区为引导分区
+
+/dev/sda2 分区为系统分区
+
+### 格式化引导分区
+
+```bash
+mkfs.fat -F32 /dev/sda1 # 在 /dev/sda1 上创建一个 FAT32 文件系统。FAT32 是一种通用的文件系统，适用于存储引导文件和其他数据
+```
+
+### 设置LVM物理卷
+
+```bash
+pvcreate /dev/sda2 # 将 /dev/sda2 设置为物理卷用于LVM
+vgcreate archlinux /dev/sda2 # 创建一个名为 archlinux 的卷组，使用 /dev/sda2 作为物理卷
+```
+
+### 设置交换分区
+
+```bash
+lvcreate -L 4G archlinux -n swap # 在 archlinux 卷组中创建一个4GB大小的交换分区
+mkswap /dev/mapper/archlinux-swap # 在 swap 逻辑卷上创建一个交换文件系统
+swapon /dev/mapper/archlinux-swap # 格式化并启用交换分区
+```
+
+### 设置系统分区
+
+```bash
+lvcreate -l +100%FREE archlinux -n root # 在 archlinux 卷组中创建一个名为 root 的逻辑卷，使用剩余的所有可用空间作为根文件系统
+mkfs.ext4 /dev/mapper/archlinux-root # 在 root 逻辑卷上创建一个 ext4 文件系统，用于存储操作系统和用户数据
+#至此，LVM分区就创建好了，我们可以使用：
+lvs # 命令检查LVM分区情况
+```
+
+### LVM分区在高负载状态下对操作系统是存在一定影响的
+
+但同时有一定的安全性，稳定性
+
+### 对分区进行挂载
+
+- Linux环境下的`/mnt`目录可用于挂载，这里我们使用`mount`命令
+
+```bash
+mount /dev/mapper/linux-root /mnt # 挂载系统分区
+mkdir -p /mnt/boot/efi # 创建efi引导启动目录
+mount /dev/sda1 /mnt/boot/efi # 将efi引导分区挂载启动目录
+```
